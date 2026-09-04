@@ -1,0 +1,25 @@
+# Local, single-host deployment. No image or personal data leaves this host.
+services:
+  api:
+    build: .
+    environment:
+      IQAMA_DATA_DIR: /srv/data
+      IQAMA_OCR_PROVIDER: ${IQAMA_OCR_PROVIDER:-easyocr}   # paddle | easyocr
+      IQAMA_ENC_KEY: ${IQAMA_ENC_KEY:-}                     # base64 32-byte key; generated into data/.enc_key if empty
+      IQAMA_API_KEY: ${IQAMA_API_KEY:-}
+      IQAMA_WORKERS: "2"
+    volumes:
+      - ./data:/srv/data
+      - ./config:/srv/config
+      - ocr-models:/root/.EasyOCR
+    ports: ["8000:8000"]
+  ui:
+    build: .
+    command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+    environment:
+      IQAMA_API_BASE_URL: http://api:8000
+      IQAMA_API_KEY: ${IQAMA_API_KEY:-}
+    ports: ["8501:8501"]
+    depends_on: [api]
+volumes:
+  ocr-models:

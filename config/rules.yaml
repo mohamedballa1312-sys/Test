@@ -1,0 +1,47 @@
+# Rules v1 — from user decisions 2026-09-04. Change here, never in code.
+version_note: "Rules v1 - 2026-09-04"
+
+image:
+  min_quality_score: 0.45
+  min_card_width_px: 600
+  upscale_below_px: 1200
+
+ocr:
+  provider: paddle            # paddle | easyocr | mock  (env IQAMA_OCR_PROVIDER overrides)
+  min_field_confidence: 0.75  # for critical fields
+  critical_fields: [iqama_no, expiry_date, nationality, employer_id, occupation]
+  external:
+    enabled: false            # any provider that sends images off-device needs this + acknowledgement
+    acknowledged_by: null
+
+checks:
+  order: [NATIONALITY, EXPIRY, EMPLOYER, OCCUPATION]
+
+nationality:
+  mode: ALL_APPROVED          # ALL_APPROVED | BLOCKLIST | ALLOWLIST
+  file: nationalities.csv
+
+expiry:
+  timezone: Asia/Riyadh
+  warn_days: 30               # 0..warn_days remaining -> EXPIRING_SOON -> MANUAL_REVIEW
+
+employer:
+  individual_auto_reject_threshold: 0.85
+  id_prefix_map: { "1": INDIVIDUAL, "2": INDIVIDUAL, "7": COMPANY }
+  rules_file: employer_rules.yaml
+  reference_file: employers_reference.csv
+
+occupation:
+  model: ALLOWLIST            # ALLOWLIST: unlisted -> REVIEW ; BLOCKLIST: unlisted -> PASS
+  fuzzy_threshold: 0.88
+  review_below_confidence: 0.95
+  file: occupations.csv
+
+decision:
+  auto_approve: false         # false: all-PASS cases still go to a human with RECOMMEND_APPROVE
+  require_human_confirmation_on_reject: false
+  hard_fail_min_confidence: 0.85
+
+retention:
+  delete_images_after_final_decision: true
+  data_retention_days: 365

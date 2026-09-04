@@ -1,0 +1,25 @@
+# runtime data — never commit
+data/
+*.db
+*.sqlite
+*.enc
+.enc_key
+*.log
+# sample images / PII — never commit
+samples/
+*.jpg
+*.jpeg
+*.png
+*.pdf
+!docs/**/*.png
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+build/
+dist/
+.venv/
+.env

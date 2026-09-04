@@ -1,0 +1,67 @@
+code,name_ar,name_en,aliases,approved,note,updated_by,updated_at
+SD,السودان,Sudan,سوداني|سودانية|السودانية,Yes,,admin,2026-09-04
+EG,مصر,Egypt,مصري|مصرية|جمهورية مصر العربية,Yes,,admin,2026-09-04
+YE,اليمن,Yemen,يمني|يمنية|الجمهورية اليمنية,Yes,,admin,2026-09-04
+IN,الهند,India,هندي|هندية,Yes,,admin,2026-09-04
+PK,باكستان,Pakistan,باكستاني|باكستانية|الباكستان,Yes,,admin,2026-09-04
+BD,بنغلاديش,Bangladesh,بنجلاديش|بنغلادش|بنغالي|بنجلادش,Yes,,admin,2026-09-04
+PH,الفلبين,Philippines,فلبيني|فلبينية|الفليبين,Yes,,admin,2026-09-04
+NP,نيبال,Nepal,نيبالي|نيبالية,Yes,,admin,2026-09-04
+LK,سريلانكا,Sri Lanka,سيريلانكا|سريلانكي|سيلان,Yes,,admin,2026-09-04
+ID,اندونيسيا,Indonesia,إندونيسيا|اندونيسي|أندونيسيا,Yes,,admin,2026-09-04
+JO,الأردن,Jordan,الاردن|أردني|اردني,Yes,,admin,2026-09-04
+SY,سوريا,Syria,سوريه|سوري|الجمهورية العربية السورية,Yes,,admin,2026-09-04
+LB,لبنان,Lebanon,لبناني,Yes,,admin,2026-09-04
+PS,فلسطين,Palestine,فلسطيني,Yes,,admin,2026-09-04
+IQ,العراق,Iraq,عراقي,Yes,,admin,2026-09-04
+ET,إثيوبيا,Ethiopia,اثيوبيا|أثيوبيا|اثيوبي|إثيوبي,Yes,,admin,2026-09-04
+ER,إريتريا,Eritrea,اريتريا|أريتريا|اريتري,Yes,,admin,2026-09-04
+SO,الصومال,Somalia,صومالي,Yes,,admin,2026-09-04
+NG,نيجيريا,Nigeria,نيجيري,Yes,,admin,2026-09-04
+TD,تشاد,Chad,تشادي,Yes,,admin,2026-09-04
+AF,أفغانستان,Afghanistan,افغانستان|أفغاني|افغاني,Yes,,admin,2026-09-04
+TR,تركيا,Turkey,تركي,Yes,,admin,2026-09-04
+MA,المغرب,Morocco,مغربي,Yes,,admin,2026-09-04
+TN,تونس,Tunisia,تونسي,Yes,,admin,2026-09-04
+DZ,الجزائر,Algeria,جزائري,Yes,,admin,2026-09-04
+LY,ليبيا,Libya,ليبي,Yes,,admin,2026-09-04
+MR,موريتانيا,Mauritania,موريتاني,Yes,,admin,2026-09-04
+KW,الكويت,Kuwait,كويتي,Yes,,admin,2026-09-04
+AE,الإمارات,United Arab Emirates,الامارات|إماراتي|اماراتي|الإمارات العربية المتحدة,Yes,,admin,2026-09-04
+QA,قطر,Qatar,قطري,Yes,,admin,2026-09-04
+BH,البحرين,Bahrain,بحريني,Yes,,admin,2026-09-04
+OM,عمان,Oman,عماني|سلطنة عمان,Yes,,admin,2026-09-04
+MM,ميانمار,Myanmar,بورما|بورمي|ميانماري,Yes,,admin,2026-09-04
+VN,فيتنام,Vietnam,فيتنامي,Yes,,admin,2026-09-04
+TH,تايلاند,Thailand,تايلندي|تايلند,Yes,,admin,2026-09-04
+CN,الصين,China,صيني,Yes,,admin,2026-09-04
+KE,كينيا,Kenya,كيني,Yes,,admin,2026-09-04
+UG,أوغندا,Uganda,اوغندا|أوغندي,Yes,,admin,2026-09-04
+TZ,تنزانيا,Tanzania,تنزاني,Yes,,admin,2026-09-04
+GH,غانا,Ghana,غاني,Yes,,admin,2026-09-04
+CM,الكاميرون,Cameroon,كاميروني,Yes,,admin,2026-09-04
+SN,السنغال,Senegal,سنغالي,Yes,,admin,2026-09-04
+ML,مالي,Mali,مالي,Yes,,admin,2026-09-04
+NE,النيجر,Niger,نيجري,Yes,,admin,2026-09-04
+BF,بوركينا فاسو,Burkina Faso,بوركيني,Yes,,admin,2026-09-04
+US,الولايات المتحدة,United States,أمريكا|امريكا|أمريكي|امريكي|الولايات المتحدة الامريكية,Yes,,admin,2026-09-04
+GB,بريطانيا,United Kingdom,المملكة المتحدة|بريطاني,Yes,,admin,2026-09-04
+CA,كندا,Canada,كندي,Yes,,admin,2026-09-04
+FR,فرنسا,France,فرنسي,Yes,,admin,2026-09-04
+DE,ألمانيا,Germany,المانيا|ألماني|الماني,Yes,,admin,2026-09-04
+IT,إيطاليا,Italy,ايطاليا|إيطالي,Yes,,admin,2026-09-04
+ES,إسبانيا,Spain,اسبانيا|إسباني,Yes,,admin,2026-09-04
+AU,أستراليا,Australia,استراليا|أسترالي,Yes,,admin,2026-09-04
+ZA,جنوب أفريقيا,South Africa,جنوب افريقيا,Yes,,admin,2026-09-04
+KR,كوريا الجنوبية,South Korea,كوريا|كوري,Yes,,admin,2026-09-04
+JP,اليابان,Japan,ياباني,Yes,,admin,2026-09-04
+MY,ماليزيا,Malaysia,ماليزي,Yes,,admin,2026-09-04
+SG,سنغافورة,Singapore,سنغافوري,Yes,,admin,2026-09-04
+UZ,أوزبكستان,Uzbekistan,اوزبكستان|أوزبكي,Yes,,admin,2026-09-04
+KG,قيرغيزستان,Kyrgyzstan,قرغيزستان|قيرغيزي,Yes,,admin,2026-09-04
+TJ,طاجيكستان,Tajikistan,طاجيكي,Yes,,admin,2026-09-04
+KZ,كازاخستان,Kazakhstan,كازاخي,Yes,,admin,2026-09-04
+IR,إيران,Iran,ايران|إيراني,Yes,,admin,2026-09-04
+SS,جنوب السودان,South Sudan,جنوب سوداني,Yes,,admin,2026-09-04
+DJ,جيبوتي,Djibouti,جيبوتي,Yes,,admin,2026-09-04
+KM,جزر القمر,Comoros,قمري,Yes,,admin,2026-09-04
