@@ -17,7 +17,7 @@ class PaddleProvider:
         self._ocr = PaddleOCR(lang=lang, use_doc_orientation_classify=False, use_doc_unwarping=False,
                               use_textline_orientation=False)
 
-    def read(self, image: np.ndarray) -> list[OCRLine]:
+    def read(self, image: np.ndarray, **overrides) -> list[OCRLine]:
         res = self._ocr.predict(image)
         out: list[OCRLine] = []
         if not res:

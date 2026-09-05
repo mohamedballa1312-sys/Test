@@ -15,7 +15,7 @@ class MockProvider:
         self.digits = digits or {}
         self.calls = 0
 
-    def read(self, image: np.ndarray) -> list[OCRLine]:
+    def read(self, image: np.ndarray, **overrides) -> list[OCRLine]:
         self.calls += 1
         return list(self.lines)
 

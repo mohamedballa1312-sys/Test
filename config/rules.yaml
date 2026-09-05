@@ -12,6 +12,10 @@ layout:
 
 ocr:
   provider: easyocr           # easyocr (validated, default) | paddle (untested here) | mock  (env IQAMA_OCR_PROVIDER overrides)
+  easyocr:                    # detector tuning (Phase 5 benchmark on the hardest 30 cards)
+    default: {}
+    small_card: { canvas_size: 3200, mag_ratio: 1.5, low_text: 0.3, link_threshold: 0.3 }
+    small_card_below_px: 1000 # cards narrower than this (before upscaling) get the heavier settings
   min_field_confidence: 0.75  # for critical fields
   critical_fields: [iqama_no, expiry_date, nationality, employer_id, occupation]
   external:

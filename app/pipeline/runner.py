@@ -21,10 +21,12 @@ def process_image(img: np.ndarray, rules: RulesSnapshot, provider: OCRProvider, 
     cfg = rules.config
     pre = preprocess(img, upscale_below_px=cfg.image.upscale_below_px)
     card = pre.image
-    res = _run(card, rules, provider)
+    tuning = cfg.ocr.easyocr
+    ocr_kw = dict(tuning.small_card if pre.metrics.get("width", 10**6) < tuning.small_card_below_px else tuning.default)
+    res = _run(card, rules, provider, ocr_kw)
     if res.anchors_found < MIN_ANCHORS_BEFORE_ROTATE:
         rotated = cv2.rotate(card, cv2.ROTATE_180)
-        res2 = _run(rotated, rules, provider)
+        res2 = _run(rotated, rules, provider, ocr_kw)
         if res2.anchors_found > res.anchors_found:
             res, card = res2, rotated
             res.warnings.append("card was upside down; rotated 180°")
@@ -39,7 +41,10 @@ def process_image(img: np.ndarray, rules: RulesSnapshot, provider: OCRProvider, 
     return res, card
 
 
-def _run(card: np.ndarray, rules: RulesSnapshot, provider: OCRProvider) -> ExtractionResult:
-    lines = provider.read(card)
+def _run(card: np.ndarray, rules: RulesSnapshot, provider: OCRProvider, ocr_kw: dict | None = None) -> ExtractionResult:
+    try:
+        lines = provider.read(card, **(ocr_kw or {}))
+    except TypeError:  # provider without tunable read parameters
+        lines = provider.read(card)
     H, W = card.shape[:2]
     return Extractor(rules, provider).extract(lines, card, W, H)

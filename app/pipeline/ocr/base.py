@@ -33,7 +33,7 @@ class OCRProvider(Protocol):
     name: str
     sends_data_externally: bool
 
-    def read(self, image: np.ndarray) -> list[OCRLine]: ...
+    def read(self, image: np.ndarray, **overrides) -> list[OCRLine]: ...
 
     def read_digits(self, crop: np.ndarray) -> tuple[str, float]:
         """Recognise a crop known to contain only digits and separators. Providers without a

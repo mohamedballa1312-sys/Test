@@ -28,8 +28,9 @@ class EasyOCRProvider:
             out.append(OCRLine(text=str(text), bbox=(x, y, int(max(xs) - x), int(max(ys) - y)), confidence=float(conf)))
         return out
 
-    def read(self, image: np.ndarray) -> list[OCRLine]:
-        return self._to_lines(self._reader.readtext(image, paragraph=False, **self.read_kwargs))
+    def read(self, image: np.ndarray, **overrides) -> list[OCRLine]:
+        kw = {**self.read_kwargs, **overrides}
+        return self._to_lines(self._reader.readtext(image, paragraph=False, **kw))
 
     def read_digits(self, crop: np.ndarray) -> tuple[str, float]:
         res = self._reader.readtext(crop, paragraph=False, allowlist=_DIGITS, detail=1)

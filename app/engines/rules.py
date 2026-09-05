@@ -33,8 +33,17 @@ class OCRExternal(BaseModel):
     acknowledged_by: str | None = None
 
 
+class EasyOCRTuning(BaseModel):
+    # detector settings; the "small_card" set (benchmarked on the hardest 30 cards) nearly doubles ID/number recall
+    # on screenshots below ~1000 px, at ~2x the time - so it is applied only to small cards
+    default: dict[str, Any] = Field(default_factory=dict)
+    small_card: dict[str, Any] = Field(default_factory=lambda: {"canvas_size": 3200, "mag_ratio": 1.5, "low_text": 0.3, "link_threshold": 0.3})
+    small_card_below_px: int = 1000
+
+
 class OCRRules(BaseModel):
     provider: str = "paddle"
+    easyocr: EasyOCRTuning = Field(default_factory=EasyOCRTuning)
     min_field_confidence: float = 0.75
     critical_fields: list[str] = Field(default_factory=lambda: ["iqama_no", "expiry_date", "nationality", "employer_id", "occupation"])
     external: OCRExternal = Field(default_factory=OCRExternal)
