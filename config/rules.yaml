@@ -42,6 +42,7 @@ decision:
   auto_approve: false         # false: all-PASS cases still go to a human with RECOMMEND_APPROVE
   require_human_confirmation_on_reject: false
   hard_fail_min_confidence: 0.85
+  hard_fail_min_confidence_by_check: { EXPIRY: 0.75 }   # Phase 4: expiry reads >= 0.6 with separators were all correct
 
 retention:
   delete_images_after_final_decision: true

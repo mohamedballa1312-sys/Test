@@ -59,8 +59,8 @@ def decide(x: ExtractionResult, rules: RulesSnapshot, clock: Clock | None = None
             triggers.append(f"LOW_CONFIDENCE:{f} ({fv.confidence:.2f})")
 
     # ---- G1: hard fails (all reasons collected, in check order) ----
-    hard = [c for c in checks if c.outcome == "FAIL" and c.confidence >= cfg.decision.hard_fail_min_confidence]
-    soft_fail = [c for c in checks if c.outcome == "FAIL" and c.confidence < cfg.decision.hard_fail_min_confidence]
+    hard = [c for c in checks if c.outcome == "FAIL" and c.confidence >= cfg.decision.hard_fail_threshold(c.check)]
+    soft_fail = [c for c in checks if c.outcome == "FAIL" and c.confidence < cfg.decision.hard_fail_threshold(c.check)]
     if hard:
         reasons = [c.reason or c.label for c in hard]
         # failures the engine could not confirm are still surfaced (report + reviewer), never silently dropped

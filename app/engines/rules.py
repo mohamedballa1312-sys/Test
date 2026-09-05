@@ -80,6 +80,11 @@ class DecisionRules(BaseModel):
     auto_approve: bool = False
     require_human_confirmation_on_reject: bool = False
     hard_fail_min_confidence: float = 0.85
+    # per-check override; Phase 4 ground truth: every separator-bearing expiry read >= 0.6 was correct
+    hard_fail_min_confidence_by_check: dict[str, float] = Field(default_factory=lambda: {"EXPIRY": 0.75})
+
+    def hard_fail_threshold(self, check: str) -> float:
+        return self.hard_fail_min_confidence_by_check.get(check, self.hard_fail_min_confidence)
 
 
 class RetentionRules(BaseModel):
