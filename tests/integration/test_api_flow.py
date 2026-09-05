@@ -81,7 +81,27 @@ def test_full_flow(api, restore_occupations):
     assert r["decision"]["status"] == "MANUAL_REVIEW" and r["decision"]["recommendation"] == "RECOMMEND_APPROVE", r["decision"]
     r = api.post(f"/api/v1/documents/{s2['id']}/review", json={"status": "APPROVED", "note": "ok"}, headers={"X-Actor": "reviewer1"}).json()
     assert r["decision"]["status"] == "APPROVED" and r["decision"]["is_final"]
-    assert api.get(f"/api/v1/documents/{s2['id']}/image").status_code == 410   # image deleted after final decision
+    assert api.get(f"/api/v1/documents/{s2['id']}/image").status_code == 200   # kept until the permit request is generated
+
+    # permit request from the customer's Word template (only when the real template is available locally)
+    tpl = os.environ.get("IQAMA_PERMIT_TEMPLATE")
+    if tpl and Path(tpl).exists():
+        up = api.put("/api/v1/templates/permit", files={"file": ("t.docx", Path(tpl).read_bytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")})
+        assert up.status_code == 200, up.text
+        api.patch(f"/api/v1/batches/{bid}/project", json={"requesting_companies": ["قدرة العربية"], "project": {"name": "مشروع اختبار", "location": "الرياض", "work_start": "2026/09/10", "work_end_expected": "2026/12/31"}})
+        doc2 = api.get(f"/api/v1/documents/{s2['id']}").json()
+        assert doc2["company_source"] in ("CARD", "AUTO", "MANUAL") and doc2["company_options"]
+        api.patch(f"/api/v1/documents/{s2['id']}/company", json={"company_name": "قدرة العربية"})
+        p = api.get(f"/api/v1/batches/{bid}/permit", params={"format": "docx"})
+        assert p.status_code == 200 and p.content[:2] == b"PK", p.text
+        from docx import Document
+        import io as _io
+        d = Document(_io.BytesIO(p.content))
+        team = d.tables[1]
+        assert team.rows[1].cells[4].text == "ابوبكر عباس الزبير عباس" and team.rows[1].cells[2].text == "قدرة العربية"
+        assert team.rows[1].cells[1].text == "2627946219"           # the form needs the full number
+        assert d.tables[3].rows and "ابوبكر" in d.tables[3].rows[0].cells[1].text   # card image + caption
+        assert api.get(f"/api/v1/batches/{bid}").json()["permit_exported_at"]
 
     # exports
     x = api.get(f"/api/v1/batches/{bid}/export", params={"format": "xlsx"})

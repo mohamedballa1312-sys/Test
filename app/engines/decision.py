@@ -20,7 +20,14 @@ _CHECKS = {
 
 
 def run_checks(x: ExtractionResult, rules: RulesSnapshot, clock: Clock | None = None) -> list[CheckResult]:
-    return [_CHECKS[name](x, rules, clock) for name in rules.config.checks.order]
+    out = []
+    for name in rules.config.checks.order:
+        if x.doc_type == "NATIONAL_ID" and name in rules.config.national_id.skip_checks:
+            out.append(CheckResult(check=name, outcome="PASS", label="NOT_APPLICABLE", confidence=1.0, rules_version=rules.version,
+                                   evidence=[{"layer": "doc_type", "signal": "national_id_skips_check"}]))
+            continue
+        out.append(_CHECKS[name](x, rules, clock))
+    return out
 
 
 def _apply_cross_check_rules(checks: list[CheckResult], rules: RulesSnapshot) -> None:

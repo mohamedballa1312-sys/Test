@@ -44,7 +44,8 @@ docker compose up --build       # api :8000, ui :8501, data in ./data, rules in 
 5. **Decision** → `REJECTED` (all reasons listed) / `MANUAL_REVIEW` (with recommendation) / `APPROVED`
    (only when `decision.auto_approve: true`; default off — a human approves).
 6. **Review** → side-by-side image + fields, correct → engines re-run (no OCR), approve/reject, image deleted.
-7. **Export** → `permit_file_<batch>.xlsx` / `.csv`; ID numbers masked unless explicitly unmasked (audited).
+7. **Export** → `permit_file_<batch>.xlsx` / `.csv` (IDs masked unless explicitly unmasked, audited), and the
+   **permit request** (Word/PDF) filled into the customer's own template — see `docs/05-permit-request.md`.
 
 ## Rules live in `config/`, not in code
 

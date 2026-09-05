@@ -60,9 +60,22 @@ with st.sidebar:
 if page.startswith("1"):
     st.header("Upload Iqamas")
     name = st.text_input("Batch name", value=f"batch-{time.strftime('%Y%m%d-%H%M')}")
+    try:
+        defaults = api("GET", "/api/v1/rules").json()["config"]["permit"]["default_requesting_companies"]
+    except Exception:
+        defaults = []
+    st.subheader("Permit request details")
+    companies_txt = st.text_input("Requesting company / companies (comma-separated) — الشركة الطالبة للتصريح", value=", ".join(defaults))
+    c1, c2 = st.columns(2)
+    p_name = c1.text_input("Project name — اسم المشروع")
+    p_loc = c2.text_input("Location — الموقع")
+    p_start = c1.text_input("Work start date — تاريخ بداية الأعمال", placeholder="YYYY/MM/DD")
+    p_end = c2.text_input("Expected end date — التاريخ المتوقع للانتهاء", placeholder="YYYY/MM/DD")
     files = st.file_uploader("Drag & drop JPG / PNG / PDF (multiple)", type=["jpg", "jpeg", "png", "pdf"], accept_multiple_files=True)
     if st.button("Upload & Process", type="primary", disabled=not files):
-        r = api("POST", "/api/v1/batches", json={"name": name})
+        body = {"name": name, "requesting_companies": [c.strip() for c in companies_txt.split(",") if c.strip()],
+                "project": {"name": p_name, "location": p_loc, "work_start": p_start, "work_end_expected": p_end}}
+        r = api("POST", "/api/v1/batches", json=body)
         if r:
             bid = r.json()["id"]
             up = api("POST", f"/api/v1/batches/{bid}/documents", files=[("files", (f.name, f.getvalue(), f.type)) for f in files])
@@ -140,6 +153,27 @@ elif page.startswith("2"):
     if x: c1.download_button("⬇️ Permit file (Excel)", x.content, f"permit_file_{bid}.xlsx")
     c = api("GET", f"/api/v1/batches/{bid}/export", params={"format": "csv", "unmask": str(unmask).lower()})
     if c: c2.download_button("⬇️ Permit file (CSV)", c.content, f"permit_file_{bid}.csv")
+    st.divider()
+    st.subheader("طلب تصريح — فريق شركة ترشيد")
+    tpl = api("GET", "/api/v1/templates")
+    if tpl and not tpl.json()["permit"]["present"]:
+        st.warning("No permit template uploaded yet — upload it on the Rules page.")
+    else:
+        st.caption(f"Approved workers only · requesting companies: {', '.join(b.get('requesting_companies', []))} · project: {b.get('project', {}).get('name') or '—'}")
+        p1, p2 = st.columns(2)
+        if p1.button("Generate Word (.docx)"):
+            r = api("GET", f"/api/v1/batches/{bid}/permit", params={"format": "docx"})
+            if r: st.session_state["permit_docx"] = r.content
+        if p2.button("Generate PDF"):
+            r = api("GET", f"/api/v1/batches/{bid}/permit", params={"format": "pdf"})
+            if r:
+                if r.headers.get("X-Permit-Warning"): st.warning(r.headers["X-Permit-Warning"])
+                st.session_state["permit_pdf"] = (r.content, r.headers.get("content-type", ""))
+        if st.session_state.get("permit_docx"):
+            p1.download_button("⬇️ permit_request.docx", st.session_state["permit_docx"], f"permit_request_{bid}.docx")
+        if st.session_state.get("permit_pdf"):
+            data, ct = st.session_state["permit_pdf"]
+            p2.download_button("⬇️ permit_request" + (".pdf" if "pdf" in ct else ".docx"), data, f"permit_request_{bid}." + ("pdf" if "pdf" in ct else "docx"))
 
 
 # ---------------- 3 review ----------------
@@ -190,6 +224,13 @@ elif page.startswith("3"):
             r = api("PATCH", f"/api/v1/documents/{doc_id}/fields", json={"fields": new})
             if r:
                 st.success(f"New decision: {r.json()['decision']['status']}"); st.rerun()
+        st.markdown(f"**Company on permit form:** `{d.get('company_final') or '—'}` ({d.get('company_source')}) · doc type `{d.get('doc_type')}`")
+        opts = d.get("company_options") or []
+        if opts and d.get("doc_type") != "NATIONAL_ID":
+            cur = d.get("company_final")
+            choice = st.radio("Choose the company name — اسم الشركة", opts, index=opts.index(cur) if cur in opts else 0, horizontal=True)
+            if choice != cur and st.button("Set company"):
+                if api("PATCH", f"/api/v1/documents/{doc_id}/company", json={"company_name": choice}): st.rerun()
         note = st.text_input("Reviewer note")
         if c2.button("✅ Approve"):
             if api("POST", f"/api/v1/documents/{doc_id}/review", json={"status": "APPROVED", "note": note}): st.rerun()
@@ -211,7 +252,14 @@ elif page.startswith("4"):
     st.header("Rules (no code changes needed)")
     rules = api("GET", "/api/v1/rules").json()
     st.caption(f"Active version `{rules['version']}` · {rules['config'].get('version_note')}")
-    tab1, tab2, tab3 = st.tabs(["Occupations", "Nationalities", "Edit files"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Occupations", "Nationalities", "Edit files", "Permit template"])
+    with tab4:
+        tpl = api("GET", "/api/v1/templates").json()["permit"]
+        st.write("Current template:", "✅ uploaded" if tpl["present"] else "❌ none")
+        up = st.file_uploader("Upload the Word template (طلب تصريح – فريق شركة ترشيد)", type=["docx"])
+        if up and st.button("Save template"):
+            r = api("PUT", "/api/v1/templates/permit", files={"file": (up.name, up.getvalue(), up.type)})
+            if r: st.success("Template saved"); st.rerun()
     with tab1:
         st.dataframe(rules["occupations"], use_container_width=True, hide_index=True)
     with tab2:

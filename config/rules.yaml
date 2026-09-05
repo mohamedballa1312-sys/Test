@@ -50,4 +50,16 @@ decision:
 
 retention:
   delete_images_after_final_decision: true
+  delete_images_after: PERMIT_EXPORT   # FINAL_DECISION | PERMIT_EXPORT (images are embedded in the permit request)
   data_retention_days: 365
+
+national_id:                           # Saudi national ID cards (provisional - awaiting samples)
+  skip_checks: [EMPLOYER, OCCUPATION]
+  nationality_code: SA
+
+permit:
+  default_requesting_companies: ["قدرة العربية"]
+  company_match_threshold: 0.85        # card employer ~ requesting company -> adopted automatically
+  include_statuses: [APPROVED]
+  stamp_approved_rows: true
+  stamp_images: true

@@ -24,6 +24,15 @@ class ReviewService:
         self.rules = rules
         self.clock = clock
 
+    def set_company(self, doc_id: int, company_name: str, actor: str) -> dict:
+        with session_scope() as s:
+            doc = s.get(Document, doc_id)
+            if doc is None:
+                raise KeyError(f"document {doc_id} not found")
+            doc.company_final, doc.company_source = company_name.strip(), "MANUAL"
+            record(s, actor, "COMPANY_SET", "document", doc_id, {"company": company_name})
+            return {"document_id": doc_id, "company_final": doc.company_final, "company_source": doc.company_source}
+
     def queue(self, batch_id: int | None = None) -> list[dict]:
         with session_scope() as s:
             q = select(Document).join(DecisionRow).where(DecisionRow.is_current == True, DecisionRow.status == "MANUAL_REVIEW", DecisionRow.is_final == False)  # noqa: E712
@@ -84,7 +93,7 @@ class ReviewService:
             s.add(Review(document_id=doc_id, reviewer=actor, submitted_at=datetime.now(timezone.utc), final_status=final_status,
                          note=note, previous_decision_id=prev.id if prev else None, new_decision_id=row.id))
             record(s, actor, "REVIEW_SUBMITTED", "document", doc_id, {"final_status": final_status, "note": note})
-            if rules.config.retention.delete_images_after_final_decision:
+            if rules.config.retention.delete_images_after_final_decision and rules.config.retention.delete_images_after == "FINAL_DECISION":
                 delete_image(s, doc, actor)
             return {"document_id": doc_id, "decision": decision_to_dict(row)}
 

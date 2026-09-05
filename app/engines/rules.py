@@ -95,7 +95,22 @@ class DecisionRules(BaseModel):
 
 class RetentionRules(BaseModel):
     delete_images_after_final_decision: bool = True
+    # FINAL_DECISION: delete right after the human decision; PERMIT_EXPORT: keep until the permit request is generated
+    delete_images_after: Literal["FINAL_DECISION", "PERMIT_EXPORT"] = "PERMIT_EXPORT"
     data_retention_days: int = 365
+
+
+class NationalIdRules(BaseModel):
+    skip_checks: list[Literal["NATIONALITY", "EXPIRY", "EMPLOYER", "OCCUPATION"]] = Field(default_factory=lambda: ["EMPLOYER", "OCCUPATION"])
+    nationality_code: str = "SA"
+
+
+class PermitRules(BaseModel):
+    default_requesting_companies: list[str] = Field(default_factory=lambda: ["قدرة العربية"])
+    company_match_threshold: float = 0.85   # card employer ~ requesting company => adopt automatically
+    include_statuses: list[str] = Field(default_factory=lambda: ["APPROVED"])
+    stamp_approved_rows: bool = True
+    stamp_images: bool = True
 
 
 class RulesConfig(BaseModel):
@@ -110,6 +125,8 @@ class RulesConfig(BaseModel):
     occupation: OccupationRules = Field(default_factory=OccupationRules)
     decision: DecisionRules = Field(default_factory=DecisionRules)
     retention: RetentionRules = Field(default_factory=RetentionRules)
+    national_id: NationalIdRules = Field(default_factory=NationalIdRules)
+    permit: PermitRules = Field(default_factory=PermitRules)
 
 
 class EmployerKeywordRules(BaseModel):

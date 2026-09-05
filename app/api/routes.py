@@ -9,13 +9,15 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 
 from app.api import schemas
-from app.api.deps import actor, batch_service, clock, report_service, require_api_key, review_service, rules_repo
+from app.api.deps import actor, batch_service, clock, permit_service, report_service, require_api_key, review_service, rules_repo
 from app.audit.log import record
 from app.core.security import mask_id
 from app.db.models import AuditLog, Batch, DecisionRow, Document
 from app.db.session import session_scope
 from app.engines.rules import FILES, RulesLoadError
 from app.services import retention
+from app.services.permit import PermitTemplateError
+from app.services.permit_export import save_template, template_path
 from app.services.store import current_decision, decision_to_dict, load_extraction
 
 router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
@@ -24,7 +26,9 @@ SENSITIVE = {"iqama_no", "employer_id"}
 
 def _batch_out(b: Batch, summary: dict | None = None) -> dict:
     return {"id": b.id, "name": b.name, "status": b.status, "total": b.total, "processed": b.processed,
-            "created_at": b.created_at.isoformat(), "rules_version": b.rules_version, "summary": summary}
+            "created_at": b.created_at.isoformat(), "rules_version": b.rules_version, "summary": summary,
+            "requesting_companies": json.loads(b.requesting_companies_json or "[]"), "project": json.loads(b.project_json or "{}"),
+            "permit_exported_at": b.permit_exported_at.isoformat() if b.permit_exported_at else None}
 
 
 def _doc_out(s, d: Document, unmask: bool) -> dict:
@@ -41,15 +45,19 @@ def _doc_out(s, d: Document, unmask: bool) -> dict:
     if dec and not unmask:
         for c in dec.get("checks", []):
             c.get("details", {}).pop("employer_id", None)
+    companies = json.loads(d.batch.requesting_companies_json or "[]") if d.batch else []
+    card_emp = x.value("employer_name")
+    options = ([card_emp] if card_emp else []) + [c for c in companies if c != card_emp]
     return {"id": d.id, "batch_id": d.batch_id, "filename": d.original_filename, "page_no": d.page_no, "status": d.status,
             "error": d.error_msg, "quality_score": d.quality_score, "has_image": bool(d.image_path), "duplicate_of": d.duplicate_of,
+            "doc_type": d.doc_type, "company_final": d.company_final, "company_source": d.company_source, "company_options": options,
             "fields": fields, "decision": dec, "warnings": x.warnings}
 
 
 # ---------------- batches ----------------
 @router.post("/batches", response_model=schemas.BatchOut, status_code=201)
 def create_batch(body: schemas.BatchCreate, who: str = Depends(actor)):
-    bid = batch_service().create_batch(body.name, who)
+    bid = batch_service().create_batch(body.name, who, body.requesting_companies, body.project.model_dump())
     with session_scope() as s:
         return _batch_out(s.get(Batch, bid))
 
@@ -77,6 +85,35 @@ def process(batch_id: int, who: str = Depends(actor)):
     except KeyError as e:
         raise HTTPException(404, str(e))
     return {"batch_id": batch_id, "status": "PROCESSING"}
+
+
+@router.patch("/batches/{batch_id}/project", response_model=schemas.BatchOut)
+def update_project(batch_id: int, body: schemas.BatchProjectUpdate, who: str = Depends(actor)):
+    with session_scope() as s:
+        b = s.get(Batch, batch_id)
+        if b is None:
+            raise HTTPException(404, "batch not found")
+        if body.requesting_companies is not None:
+            b.requesting_companies_json = json.dumps([c for c in body.requesting_companies if c.strip()], ensure_ascii=False)
+        if body.project is not None:
+            b.project_json = json.dumps(body.project.model_dump(), ensure_ascii=False)
+        record(s, who, "BATCH_PROJECT_UPDATED", "batch", batch_id, {})
+        return _batch_out(b)
+
+
+@router.get("/batches/{batch_id}/permit")
+def permit(batch_id: int, format: str = Query("docx", pattern="^(docx|pdf)$"), who: str = Depends(actor)):
+    try:
+        data, mime, warnings = permit_service().export(batch_id, format, who)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    except PermitTemplateError as e:
+        raise HTTPException(409, str(e))
+    ext = "pdf" if mime == "application/pdf" else "docx"
+    headers = {"Content-Disposition": f'attachment; filename="permit_request_{batch_id}.{ext}"'}
+    if warnings:
+        headers["X-Permit-Warning"] = "; ".join(warnings)
+    return Response(data, media_type=mime, headers=headers)
 
 
 @router.get("/batches/{batch_id}", response_model=schemas.BatchOut)
@@ -176,6 +213,14 @@ def correct(doc_id: int, body: schemas.Corrections, who: str = Depends(actor)):
         raise HTTPException(422, str(e))
 
 
+@router.patch("/documents/{doc_id}/company")
+def set_company(doc_id: int, body: schemas.CompanyChoice, who: str = Depends(actor)):
+    try:
+        return review_service().set_company(doc_id, body.company_name, who)
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+
+
 @router.post("/documents/{doc_id}/review")
 def submit_review(doc_id: int, body: schemas.ReviewSubmit, who: str = Depends(actor)):
     try:
@@ -263,6 +308,22 @@ def upsert_occupation(body: schemas.OccupationUpsert, who: str = Depends(actor))
     with session_scope() as s:
         record(s, who, "OCCUPATION_UPSERTED", "rules", body.occupation_ar, {"eligible": body.eligible, "version": snap.version})
     return {"version": snap.version, "count": len(snap.occupations)}
+
+
+# ---------------- templates ----------------
+@router.get("/templates")
+def list_templates():
+    tp = template_path()
+    return {"permit": {"present": tp.exists(), "bytes": tp.stat().st_size if tp.exists() else 0}}
+
+
+@router.put("/templates/permit")
+async def upload_permit_template(file: UploadFile = File(...), who: str = Depends(actor)):
+    data = await file.read()
+    try:
+        return save_template(data, who)
+    except PermitTemplateError as e:
+        raise HTTPException(422, str(e))
 
 
 # ---------------- audit ----------------

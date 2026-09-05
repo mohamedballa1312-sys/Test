@@ -52,6 +52,9 @@ class Batch(Base):
     total: Mapped[int] = mapped_column(Integer, default=0)
     processed: Mapped[int] = mapped_column(Integer, default=0)
     rules_version: Mapped[str | None] = mapped_column(String(16))
+    requesting_companies_json: Mapped[str] = mapped_column(Text, default="[]")   # companies requesting the permit
+    project_json: Mapped[str] = mapped_column(Text, default="{}")                # name/location/start/end for the permit form
+    permit_exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     documents: Mapped[list["Document"]] = relationship(back_populates="batch", cascade="all, delete-orphan")
 
 
@@ -72,6 +75,9 @@ class Document(Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     duplicate_of: Mapped[int | None] = mapped_column(Integer)
     iqama_no_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    doc_type: Mapped[str] = mapped_column(String(16), default="IQAMA")           # IQAMA | NATIONAL_ID
+    company_final: Mapped[str | None] = mapped_column(Text)                       # company name used on the permit form
+    company_source: Mapped[str | None] = mapped_column(String(16))                # CARD | AUTO | MANUAL | NATIONAL_ID
     extraction_json: Mapped[str | None] = mapped_column(EncryptedText)  # full ExtractionResult (raw lines incl.)
     batch: Mapped[Batch] = relationship(back_populates="documents")
     fields: Mapped[list["ExtractedField"]] = relationship(back_populates="document", cascade="all, delete-orphan")

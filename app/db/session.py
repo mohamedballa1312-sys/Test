@@ -24,8 +24,25 @@ def init_db(url: str | None = None):
             dbapi_con.execute("PRAGMA foreign_keys=ON")
             dbapi_con.execute("PRAGMA journal_mode=WAL")
     Base.metadata.create_all(_engine)
+    _ensure_columns(_engine)
     _Session = sessionmaker(bind=_engine, expire_on_commit=False, future=True)
     return _engine
+
+
+def _ensure_columns(engine) -> None:
+    """Additive migration for SQLite/Postgres: add columns that exist in the models but not in the DB yet."""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    with engine.begin() as con:
+        for table in Base.metadata.sorted_tables:
+            if table.name not in insp.get_table_names():
+                continue
+            existing = {c["name"] for c in insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name in existing:
+                    continue
+                ctype = col.type.compile(dialect=engine.dialect)
+                con.execute(text(f'ALTER TABLE {table.name} ADD COLUMN {col.name} {ctype}'))
 
 
 def get_engine():

@@ -370,7 +370,17 @@ class Extractor:
         if fa: res.set(fa)
         if fe: res.set(fe)
         res.layout = self._detect_layout(res, anchors, lines)
+        res.doc_type = self._detect_doc_type(res, lines)
         return res
+
+    def _detect_doc_type(self, res: ExtractionResult, lines: list[OCRLine]) -> str:
+        """Saudi national ID ("بطاقة الهوية الوطنية", number prefix 1) vs Iqama (prefix 2). Provisional: no samples yet."""
+        texts = " ".join(normalize_arabic(l.text) or "" for l in lines)
+        cues = sum(1 for k in ("الهويه الوطنيه", "بطاقه الهويه", "national id") if k in texts)
+        iq = res.value("iqama_no") or ""
+        if cues >= 1 or (iq.startswith("1") and "هويه مقيم" not in texts):
+            return "NATIONAL_ID"
+        return "IQAMA"
 
     # ---------- layout ----------
     _OLD_HEADER = ("kingdom of saudi arabia", "ministry of interior", "resident identity")

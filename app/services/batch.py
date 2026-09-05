@@ -23,6 +23,7 @@ from app.engines.rules import RulesRepository
 from app.pipeline.ingest import IngestError, ingest
 from app.pipeline.ocr.base import get_provider
 from app.pipeline.runner import process_image
+from app.services.company import resolve_company
 from app.services.store import save_decision, save_extraction
 
 log = get_logger("batch")
@@ -38,11 +39,14 @@ class BatchService:
         self._lock = threading.Lock()
 
     # ---------- ingestion ----------
-    def create_batch(self, name: str, actor: str) -> int:
+    def create_batch(self, name: str, actor: str, requesting_companies: list[str] | None = None, project: dict | None = None) -> int:
+        import json
+        companies = [c.strip() for c in (requesting_companies or []) if c and c.strip()] or list(self.rules.active.config.permit.default_requesting_companies)
         with session_scope() as s:
-            b = Batch(name=name, created_by=actor, rules_version=self.rules.active.version)
+            b = Batch(name=name, created_by=actor, rules_version=self.rules.active.version,
+                      requesting_companies_json=json.dumps(companies, ensure_ascii=False), project_json=json.dumps(project or {}, ensure_ascii=False))
             s.add(b); s.flush()
-            record(s, actor, "BATCH_CREATED", "batch", b.id, {"name": name})
+            record(s, actor, "BATCH_CREATED", "batch", b.id, {"name": name, "requesting_companies": companies})
             return b.id
 
     def add_files(self, batch_id: int, files: list[tuple[str, bytes]], actor: str) -> dict:
@@ -120,6 +124,11 @@ class BatchService:
             with session_scope() as s:
                 doc = s.get(Document, doc_id)
                 save_extraction(s, doc, x)
+                import json
+                doc.doc_type = x.doc_type
+                if doc.company_source != "MANUAL":
+                    name, source, _ = resolve_company(x.value("employer_name"), json.loads(doc.batch.requesting_companies_json or "[]"), x.doc_type, rules)
+                    doc.company_final, doc.company_source = name, source
                 # keep the processed card (what bboxes refer to) for the review screen
                 ok, buf = cv2.imencode(".png", card)
                 Path(doc.image_path).write_bytes(get_encryptor().encrypt_bytes(buf.tobytes()))
@@ -140,8 +149,8 @@ class BatchService:
     # ---------- retention ----------
     def _apply_retention(self, batch_id: int) -> None:
         cfg = self.rules.active.config.retention
-        if not cfg.delete_images_after_final_decision:
-            return
+        if not cfg.delete_images_after_final_decision or cfg.delete_images_after == "PERMIT_EXPORT":
+            return  # images are needed for the permit request; deleted on export
         with session_scope() as s:
             b = s.get(Batch, batch_id)
             for d in b.documents:
