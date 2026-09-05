@@ -77,6 +77,7 @@ class Extractor:
         self.rules = rules
         self.provider = provider
         self.W = 0
+        self.H = 0
         self.labels: list[tuple[str, str]] = []  # (field, normalized label)
         for fld, variants in rules.card_labels.items():
             for v in variants:
@@ -100,9 +101,11 @@ class Extractor:
             # penalise matches that don't sit at the start when we expect a leading label
             if anchored_start and al.dest_start > 3:
                 score -= 15
-            # short labels (المهنة, الجنسية) need a stricter score to avoid matching inside values
+            # short labels (المهنة, الجنسية, الرقم) need a stricter score to avoid matching inside values
             if len(lab) <= 7 and score < (LABEL_MIN_SCORE + 6 if not relaxed else RIGHT_COLUMN_LABEL_MIN):
                 continue
+            # a bare substring label ("صاحب العمل") must not beat its longer form ("هوية صاحب العمل"): longer wins ties
+            score += 0.01 * len(lab)
             if best is None or score > best[1]:
                 best = (fld, score, al.dest_start, al.dest_end)
         return best
@@ -113,6 +116,9 @@ class Extractor:
         for ln in lines:
             norm = normalize_arabic(ln.text) or ""
             if not has_arabic(norm):
+                free.append(ln); continue
+            # header words ("هوية مقيم", "وزارة الداخلية") and anything in the top band are never field labels
+            if (self.H and ln.y2 < 0.12 * self.H) or any(fuzz.ratio(norm, hi) >= 80 for hi in self.rules.header_ignore):
                 free.append(ln); continue
             parts = [p.strip() for p in _SEP.split(norm)]
             found_any = False
@@ -256,7 +262,7 @@ class Extractor:
         return [OCRLine(text="", bbox=(x1, anchor.y1, max(1, x2 - x1), anchor.h), confidence=0.0)]
 
     def extract(self, lines: list[OCRLine], image: np.ndarray | None, W: int, H: int) -> ExtractionResult:
-        self.W = W
+        self.W, self.H = W, H
         res = ExtractionResult(raw_lines=[{"text": l.text, "bbox": list(l.bbox), "confidence": round(l.confidence, 3)} for l in lines])
         lines = [l for l in lines if not (l.confidence < 0.15 and len(l.text.strip()) <= 2)]
         lines = merge_rows(lines)

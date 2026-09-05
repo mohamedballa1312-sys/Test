@@ -66,3 +66,37 @@ def test_merge_rows_keeps_parts():
     a = L("هوية", 1435, 1526, 750, 808); b = L("صاحب العمل:", 1222, 1443, 751, 804)
     m = merge_rows([a, b])
     assert len(m) == 1 and m[0].parts and m[0].text == "هوية صاحب العمل:"
+
+
+def old_layout_lines():
+    """Older 'RESIDENT IDENTITY' layout: bare labels, Hijri expiry, employer name only (no employer ID)."""
+    return [
+        L("KINGDOM OF SAUDI ARABIA", 60, 500, 30, 60), L("MINISTRY OF INTERIOR", 60, 500, 60, 90),
+        L("RESIDENT IDENTITY", 700, 1100, 30, 70), L("هوية مقيم", 1150, 1500, 20, 90),
+        L("عمر علي حسن محمود", 900, 1500, 110, 170), L("OMAR ALI HASSAN MAHMOUD", 700, 1500, 175, 215),
+        L("الرقم", 1420, 1530, 240, 280), L("٢١٢٣٤٥٦٧٨٤", 1150, 1400, 240, 280), L("نسخة", 1000, 1080, 240, 280), L("٥", 950, 990, 240, 280),
+        L("مكان الإصدار", 1330, 1530, 300, 340), L("موقع بوابة الوزارة الألكترونية", 900, 1320, 300, 340),
+        L("الانتهاء", 1420, 1530, 360, 400), L("١٤٣٦/٠٦/١٢", 1200, 1400, 360, 400), L("الميلاد", 1000, 1090, 360, 400), L("١٩٨٩/٠١/٠١", 780, 990, 360, 400),
+        L("المهنة", 1420, 1530, 420, 460), L("مندوب مبيعات", 1200, 1400, 420, 460),
+        L("الجنسية", 1400, 1530, 480, 520), L("السودان", 1250, 1390, 480, 520), L("الديانة", 1000, 1090, 480, 520), L("الاسلام", 880, 990, 480, 520),
+        L("صاحب العمل", 1350, 1530, 540, 580), L("مؤسسة بيت البحة لتقديم المشروبات", 800, 1340, 540, 580),
+    ]
+
+
+def test_old_layout_hijri_and_bare_labels(rules):
+    x = Extractor(rules, None).extract(old_layout_lines(), None, W, H)
+    assert x.value("iqama_no") == "2123456784"
+    assert x.value("expiry_date") == "2015-04-01"            # 1436/06/12 هـ converted
+    assert x.fields["expiry_date"].note == "direct_hijri"
+    assert x.value("birth_date") == "1989-01-01"
+    assert x.value("occupation") == "مندوب مبيعات"
+    assert x.value("nationality") == "SD"
+    assert "بيت" in x.value("employer_name")
+    assert x.value("employer_id") is None                     # not printed on this layout
+    assert x.value("name_en") == "OMAR ALI HASSAN MAHMOUD"
+
+
+def test_bare_employer_label_does_not_steal_new_layout(rules):
+    x = Extractor(rules, None).extract(card_lines(), None, W, H)
+    assert x.value("employer_id") == "7001234563"
+    assert "الامل" in x.value("employer_name") or "الأمل" in x.value("employer_name")

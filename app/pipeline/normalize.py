@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from app.core.text import luhn_ok, normalize_arabic, normalize_digits, normalize_numeric_field, parse_date
+from app.core.text import hijri_to_gregorian, is_hijri_year, luhn_ok, normalize_arabic, normalize_digits, normalize_numeric_field, parse_date
 from app.engines.rules import RulesSnapshot
 
 _CHUNK = re.compile(r"[0-9]+")
@@ -66,7 +66,8 @@ def resolve_date(text: str | None) -> tuple[date | None, float, str]:
         return None, 0.0, "empty"
     d = parse_date(text)
     if d and 1900 <= d.year <= 2100:
-        return d, 1.0, "direct"
+        y4 = re.search(r"(\d{4})", normalize_digits(text) or "")
+        return d, 1.0, ("direct_hijri" if y4 and is_hijri_year(int(y4.group(1))) else "direct")
     chunks = _digit_chunks(text)
     if not chunks:
         return None, 0.0, "no_digits"
@@ -77,8 +78,13 @@ def resolve_date(text: str | None) -> tuple[date | None, float, str]:
         if rep:
             return rep, 0.7, f"sep_repair_{how}"
         if len(s) == 8:
+            y, mo, dd_ = int(s[:4]), int(s[4:6]), int(s[6:8])
+            if is_hijri_year(y):
+                g = hijri_to_gregorian(y, mo, dd_)
+                if g:
+                    return g, 0.8 if how == "natural" else 0.75, f"8digits_hijri_{how}"
             try:
-                dd = date(int(s[:4]), int(s[4:6]), int(s[6:8]))
+                dd = date(y, mo, dd_)
                 if 1900 <= dd.year <= 2100:
                     return dd, 0.85 if how == "natural" else 0.8, f"8digits_{how}"
             except ValueError:
@@ -104,6 +110,8 @@ _SEP_LOOKALIKES = set("8")  # only ٨/8 observed as a misread slash; 1/7 caused 
 def _repair_separator_misread(s: str) -> date | None:
     """'20261 2830' -> digits '202612830' (9): drop a separator-lookalike at a separator position."""
     def _try(y: str, m: str, d: str) -> date | None:
+        if is_hijri_year(int(y)):
+            return hijri_to_gregorian(int(y), int(m), int(d))
         try:
             dd = date(int(y), int(m), int(d))
             return dd if 1900 <= dd.year <= 2100 else None

@@ -51,8 +51,26 @@ def has_latin(s: str) -> bool:
     return bool(re.search(r"[A-Za-z]", s or ""))
 
 
+HIJRI_MIN, HIJRI_MAX = 1300, 1499
+
+
+def is_hijri_year(y: int) -> bool:
+    return HIJRI_MIN <= y <= HIJRI_MAX
+
+
+def hijri_to_gregorian(y: int, m: int, d: int) -> date | None:
+    """Umm al-Qura conversion (older Iqama layouts print the expiry in Hijri)."""
+    try:
+        from hijridate import Hijri
+        g = Hijri(y, m, d).to_gregorian()
+        return date(g.year, g.month, g.day)
+    except Exception:
+        return None
+
+
 def parse_date(s: str | None) -> date | None:
-    """Card prints Gregorian YYYY/MM/DD in Arabic-Indic digits. Also accepts DD/MM/YYYY."""
+    """Card prints YYYY/MM/DD in Arabic-Indic digits — Gregorian on current cards, Hijri on older ones.
+    Hijri years (1300-1499) are converted to Gregorian. Also accepts DD/MM/YYYY."""
     if not s:
         return None
     t = normalize_digits(s)
@@ -64,6 +82,8 @@ def parse_date(s: str | None) -> date | None:
         if not m:
             return None
         d, mo, y = (int(x) for x in m.groups())
+    if is_hijri_year(y):
+        return hijri_to_gregorian(y, mo, d)
     try:
         return date(y, mo, d)
     except ValueError:
