@@ -1,7 +1,7 @@
 # Field labels as printed on the Iqama card (+ OCR variants). Order matters for row inference.
-iqama_no:      ["رقم الهوية", "رقم الهويه", "الرقم"]
-expiry_date:   ["تاريخ الانتهاء", "تاريخ الإنتهاء", "تاريخ الانتهاء:", "الانتهاء", "الإنتهاء"]
-birth_date:    ["تاريخ الميلاد", "الميلاد"]
+iqama_no:      ["رقم الهوية", "رقم الهويه", "الرقم", "ID Number", "No"]
+expiry_date:   ["تاريخ الانتهاء", "تاريخ الإنتهاء", "تاريخ الانتهاء:", "الانتهاء", "الإنتهاء", "Expiry Date", "DOE"]
+birth_date:    ["تاريخ الميلاد", "الميلاد", "Date of Birth", "DOB"]
 birth_place:   ["مكان الميلاد"]
 nationality:   ["الجنسية", "الجنسيه"]
 religion:      ["الديانة", "الديانه"]
@@ -12,4 +12,4 @@ work_place:    ["مكان العمل"]
 employer_name: ["اسم صاحب العمل", "إسم صاحب العمل", "صاحب العمل"]   # bare "صاحب العمل" = old layout (name only, no employer ID)
 version_no:    ["رقم النسخة", "رقم النسخه", "نسخة", "نسخه"]
 # header words to ignore when looking for the name lines
-header_ignore: ["resident identity", "kingdom of saudi arabia", "ministry of interior", "هوية مقيم", "هويه مقيم", "وزارة الداخلية", "المملكة العربية السعودية", "رقم النسخة", "يجب التحقق", "من الرمز السريع", "قبل اعتماد", "التعامل مع الهوية"]
+header_ignore: ["الهوية الوطنية", "الهويه الوطنيه", "resident identity", "kingdom of saudi arabia", "ministry of interior", "هوية مقيم", "هويه مقيم", "وزارة الداخلية", "المملكة العربية السعودية", "رقم النسخة", "يجب التحقق", "من الرمز السريع", "قبل اعتماد", "التعامل مع الهوية"]

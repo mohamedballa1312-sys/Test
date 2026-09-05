@@ -3,6 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from app.core.clock import FixedClock
+from app.engines.models import FieldValue
 from app.engines.decision import decide
 from app.engines.employer import classify_employer, check_employer
 from app.engines.expiry import check_expiry
@@ -153,3 +154,13 @@ def test_old_layout_requests_absher_copy(rules, make_x, clock):
     assert d.status == "MANUAL_REVIEW" and any("نسخة أبشر" in t for t in d.review_triggers)
     x.layout = "new"
     assert not any("OLD_LAYOUT" in t for t in decide(x, rules, clock).review_triggers)
+
+
+def test_national_id_skips_employer_and_occupation(rules, make_x, clock):
+    x = make_x(iqama_no="1085375663", expiry_date="2033-02-26", nationality="SA")
+    x.doc_type = "NATIONAL_ID"
+    d = decide(x, rules, clock)
+    assert d.status == "MANUAL_REVIEW" and d.recommendation == "RECOMMEND_APPROVE"
+    assert {c.check: c.label for c in d.checks}["EMPLOYER"] == "NOT_APPLICABLE"
+    x.set(FieldValue(field="expiry_date", raw_text="x", normalized="2020-01-01", confidence=0.95))
+    assert decide(x, rules, clock).status == "REJECTED"

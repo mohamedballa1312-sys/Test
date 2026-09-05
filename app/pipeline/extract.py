@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from datetime import date
 
 import numpy as np
 from rapidfuzz import fuzz
@@ -34,6 +35,7 @@ class Anchor:
     score: float                      # label match 0..100
     inline_value: str | None = None   # value found inside the same OCR box
     value_lines: list[OCRLine] = field(default_factory=list)
+    ltr: bool = False                 # English label: the value sits to its RIGHT
 
 
 def _label_factor(score: float) -> float:
@@ -78,14 +80,42 @@ class Extractor:
         self.provider = provider
         self.W = 0
         self.H = 0
-        self.labels: list[tuple[str, str]] = []  # (field, normalized label)
+        self.secondary: dict[str, Anchor] = {}
+        self.labels: list[tuple[str, str]] = []        # (field, normalized Arabic label)
+        self.latin_labels: list[tuple[str, str]] = []  # (field, lowercase English label) - matched by word boundary
         for fld, variants in rules.card_labels.items():
             for v in variants:
-                self.labels.append((fld, normalize_arabic(v).rstrip(":").strip()))
+                if has_latin(v) and not has_arabic(v):
+                    self.latin_labels.append((fld, v.lower().strip()))
+                else:
+                    self.labels.append((fld, normalize_arabic(v).rstrip(":").strip()))
 
     def _in_label_zone(self, ln: OCRLine) -> bool:
         """All printed labels live in the right ~55% of the card; the QR caption (bottom-left) must never anchor."""
-        return not self.W or ln.x2 >= 0.45 * self.W
+        return not self.W or ln.x2 >= 0.35 * self.W
+
+    def _latin_anchor(self, ln: OCRLine) -> Anchor | None:
+        """English labels on national ID cards ("ID Number:", "Date of Birth:", "DOB:"): exact word match,
+        value follows the label in the same box or sits in the next box to the right."""
+        t = (ln.text or "").strip()
+        low = t.lower()
+        for fld, lab in sorted(self.latin_labels, key=lambda x: -len(x[1])):
+            words = [re.escape(w) for w in lab.split()]
+            pat = r"(?<![a-z])" + r"\s*".join(words) + r"(?![a-z])\s*[:.]?\s*"
+            m = re.search(pat, low)
+            if m is None and len(lab) >= 8:
+                # OCR-garbled long label ("Expiry Dale:"): fuzzy on the head of the line
+                head = low[: len(lab) + 3]
+                al = fuzz.partial_ratio_alignment(lab, head)
+                if al and al.score >= 80 and al.dest_start <= 2:
+                    m = re.compile(r".{" + str(al.dest_end) + r"}\s*[:.]?\s*").match(low)
+            if m and m.start() <= 2:
+                rest = t[m.end():].strip(" :.")
+                a = Anchor(fld, ln, 100.0 + 0.01 * len(lab), inline_value=rest or None, ltr=True)
+                if ln.parts and rest:
+                    a.value_lines = [p for p in ln.parts if p.x1 >= ln.parts[0].x1 and re.search(r"\d", p.text)] or []
+                return a
+        return None
 
     # ---------- label detection ----------
     def _best_label(self, text: str, *, anchored_start: bool, relaxed: bool = False) -> tuple[str, float, int, int] | None:
@@ -118,7 +148,12 @@ class Extractor:
         for ln in lines:
             norm = normalize_arabic(ln.text) or ""
             if not has_arabic(norm):
-                free.append(ln); continue
+                la = self._latin_anchor(ln)
+                if la:
+                    anchors.append(la)
+                else:
+                    free.append(ln)
+                continue
             # header words ("هوية مقيم", "وزارة الداخلية") and anything in the top band are never field labels
             if (self.H and ln.y2 < 0.12 * self.H) or any(fuzz.ratio(norm, hi) >= 80 for hi in self.rules.header_ignore):
                 free.append(ln); continue
@@ -165,13 +200,21 @@ class Extractor:
                 if score >= pure_min and lab_len >= 0.6 * len(norm):
                     anchors.append(Anchor(fld, ln, score)); continue
             free.append(ln)
-        # keep the best-scoring anchor per field
+        # keep the best-scoring anchor per field; an English (Gregorian) date label beats the Arabic (Hijri) one,
+        # and the runner-up for dates/IDs is kept for cross-checking
+        self.secondary: dict[str, Anchor] = {}
         best: dict[str, Anchor] = {}
         for a in anchors:
-            if a.field not in best or a.score > best[a.field].score or (a.inline_value and not best[a.field].inline_value and a.score >= best[a.field].score - 5):
+            cur = best.get(a.field)
+            better = cur is None or a.ltr and not cur.ltr or (a.ltr == cur.ltr and (a.score > cur.score or (a.inline_value and not cur.inline_value and a.score >= cur.score - 5)))
+            if better:
+                if cur is not None and a.field in DATE_FIELDS | set(NUMERIC_FIELDS):
+                    self.secondary[a.field] = cur
                 best[a.field] = a
-        dropped = [a.line for a in anchors if best.get(a.field) is not a and a.line not in [b.line for b in best.values()]]
-        free.extend(dropped)
+            elif a.field in DATE_FIELDS | set(NUMERIC_FIELDS) and a.field not in self.secondary:
+                self.secondary[a.field] = a
+        kept_lines = [b.line for b in best.values()] + [b.line for b in self.secondary.values()]
+        free.extend(a.line for a in anchors if a.line not in kept_lines)
         return list(best.values()), free
 
     # ---------- spatial value assignment ----------
@@ -179,6 +222,19 @@ class Extractor:
         anchor_lines = [a.line for a in anchors]
         for a in anchors:
             if a.inline_value:
+                continue
+            if a.ltr:
+                row = sorted([l for l in free if _vertical_overlap(a.line, l) >= 0.4 and l.x1 >= a.line.x2 - 0.6 * a.line.h], key=lambda l: l.x1)
+                picked = []
+                cursor = a.line.x2
+                for l in row:
+                    if l.x1 - cursor > 6 * a.line.h or not re.search(r"\d", l.text):
+                        break
+                    picked.append(l); cursor = l.x2
+                a.value_lines = picked
+                for l in picked:
+                    if l in free:
+                        free.remove(l)
                 continue
             row = [l for l in free if _vertical_overlap(a.line, l) >= 0.4 and l.x2 <= a.line.x1 + 0.6 * a.line.h]
             # stop at the next anchor to the left on the same row
@@ -274,8 +330,10 @@ class Extractor:
         res = ExtractionResult(raw_lines=[{"text": l.text, "bbox": list(l.bbox), "confidence": round(l.confidence, 3)} for l in lines])
         lines = [l for l in lines if not (l.confidence < 0.15 and len(l.text.strip()) <= 2)]
         lines = merge_rows(lines)
+        is_national = self._doc_type_cues(lines) >= 1
+        allowed_prefix = {"iqama_no": "1" if is_national else "2", "employer_id": "127"}
         anchors, free = self._find_anchors(lines)
-        self._assign_values(anchors, free)
+        self._assign_values(anchors + list(self.secondary.values()), free)
         res.anchors_found = len(anchors)
         by_field = {a.field: a for a in anchors}
 
@@ -287,18 +345,18 @@ class Extractor:
             fv = FieldValue(field=fld, raw_text=raw, normalized=None, confidence=round(conf, 3), bbox=bbox, source="ocr")
 
             if fld in NUMERIC_FIELDS:
-                num, mult, note = resolve_ten_digit(raw, NUMERIC_FIELDS[fld])
+                num, mult, note = resolve_ten_digit(raw, allowed_prefix[fld])
                 # second pass: digits-only OCR on the value crop; visual order is natural order
                 crop_boxes = a.value_lines or (self._blind_crop(image, a.line, W) if image is not None and not a.inline_value else [a.line])
                 second = self._digits_pass(image, crop_boxes) if (mult < 1.0 or num is None or len(num or "") != 10) else None
                 if second:
-                    n2, m2, note2 = resolve_ten_digit(second[0], NUMERIC_FIELDS[fld])
+                    n2, m2, note2 = resolve_ten_digit(second[0], allowed_prefix[fld])
                     if n2 and len(n2) == 10 and (m2 > mult or num is None or len(num) != 10):
                         num, mult, note = n2, max(m2, mult), f"digits_pass:{note2}"
                         value_conf = max(value_conf, second[1])
                 fv.normalized = num if num and len(num) == 10 else None
                 fv.confidence = round(value_conf * _label_factor(a.score) * (mult if fv.normalized else 0.3), 3)
-                if fv.normalized and mult >= 1.0 and luhn_ok(fv.normalized) and fv.normalized[0] in NUMERIC_FIELDS[fld]:
+                if fv.normalized and mult >= 1.0 and luhn_ok(fv.normalized) and fv.normalized[0] in allowed_prefix[fld]:
                     # length + prefix + checksum are three independent agreements: strong enough to act on (D5)
                     fv.confidence = round(max(fv.confidence, 0.86), 3)
                 fv.note = note
@@ -327,6 +385,17 @@ class Extractor:
                 fv.normalized = d.isoformat() if d else None
                 fv.confidence = round(value_conf * _label_factor(a.score) * (mult if d else 0.0), 3)
                 fv.note = note
+                # cross-check against the other script's copy of the same date (national ID: Hijri vs Gregorian)
+                sec = self.secondary.get(fld)
+                if d is not None and sec is not None:
+                    sraw = sec.inline_value or clean_text(" ".join(l.text for l in sec.value_lines))
+                    d_sec, m_sec, _ = resolve_date(sraw)
+                    if d_sec is not None:
+                        if abs((d_sec - d).days) <= 2:
+                            fv.confidence = round(max(fv.confidence, 0.9), 3); fv.note = (fv.note or "") + " xcheck_ok"
+                        else:
+                            fv.confidence = round(fv.confidence * 0.6, 3); fv.note = (fv.note or "") + f" xcheck_mismatch({d_sec.isoformat()})"
+                            res.warnings.append(f"{fld}: Hijri/Gregorian copies disagree ({d.isoformat()} vs {d_sec.isoformat()})")
             elif fld == "nationality":
                 code, mult, note = resolve_nationality(raw, self.rules)
                 fv.normalized = code
@@ -340,16 +409,44 @@ class Extractor:
                 fv.normalized = clean_text(raw)
             res.set(fv)
 
+        # ---- Gregorian date lines (national ID: "DOB: 03/05/1994", "Expiry Date: 26/02/2033") by row overlap ----
+        date_anchors = [(a.field, a.line) for a in anchors if a.field in DATE_FIELDS] + [(f, a.line) for f, a in self.secondary.items() if f in DATE_FIELDS]
+        ascii_date = re.compile(r"(?<!\d)\d{1,2}/\d{1,2}/(?:19|20)\d{2}(?!\d)")
+        for l in list(free):
+            m = ascii_date.search(l.text or "")
+            if not m:
+                continue
+            best_f, best_ov = None, 0.0
+            for fld, al in date_anchors:
+                ov = _vertical_overlap(al, l)
+                if ov > best_ov:
+                    best_f, best_ov = fld, ov
+            if best_f and best_ov >= 0.4:
+                cur = res.fields.get(best_f)
+                d, mult, note = resolve_date(m.group(0))
+                if d and (cur is None or cur.normalized is None or cur.confidence < 0.9):
+                    conf = round(max(l.confidence, 0.8), 3)
+                    if cur is not None and cur.normalized and abs((date.fromisoformat(cur.normalized) - d).days) <= 2:
+                        conf = 0.95; note = "gregorian_line xcheck_ok"
+                    elif cur is not None and cur.normalized:
+                        conf = 0.5   # the two printed copies disagree: one of the reads is wrong -> human decides
+                        note = f"gregorian_line xcheck_mismatch({cur.normalized})"
+                        res.warnings.append(f"{best_f}: Hijri/Gregorian copies disagree ({cur.normalized} vs {d.isoformat()})")
+                    res.set(FieldValue(field=best_f, raw_text=m.group(0), normalized=d.isoformat(), confidence=conf, bbox=l.bbox, source="pattern", note=note))
+                    free.remove(l)
+
         # ---- pattern fallbacks for the two IDs ----
         if res.value("iqama_no") is None or res.value("employer_id") is None:
             found: list[tuple[str, float, OCRLine]] = []
             for l in lines:
+                if ascii_date.search(l.text or "") or re.search(r"[0-9٠-٩]{4}/[0-9٠-٩]{1,2}/[0-9٠-٩]{1,2}", l.text or ""):
+                    continue  # never mine an ID out of a date line
                 for part in (l.parts or [l]):
                     n, mult, _ = resolve_ten_digit(part.text, "127")
                     if n and len(n) == 10:
                         found.append((n, part.confidence * mult * (1.0 if luhn_ok(n) else 0.7), part))
             if res.value("iqama_no") is None:
-                c = [f for f in found if f[0][0] == "2"]
+                c = [f for f in found if f[0][0] == ("1" if is_national else "2")]
                 if c:
                     n, cf, l = max(c, key=lambda t: t[1])
                     res.set(FieldValue(field="iqama_no", raw_text=l.text, normalized=n, confidence=round(max(cf * 0.95, 0.8 if luhn_ok(n) else 0.0), 3), bbox=l.bbox, source="pattern", note="pattern_fallback"))
@@ -369,16 +466,26 @@ class Extractor:
         fa, fe = self._names(anchors, free, W, H)
         if fa: res.set(fa)
         if fe: res.set(fe)
-        res.layout = self._detect_layout(res, anchors, lines)
         res.doc_type = self._detect_doc_type(res, lines)
+        res.layout = self._detect_layout(res, anchors, lines) if res.doc_type == "IQAMA" else "unknown"
         return res
 
-    def _detect_doc_type(self, res: ExtractionResult, lines: list[OCRLine]) -> str:
-        """Saudi national ID ("بطاقة الهوية الوطنية", number prefix 1) vs Iqama (prefix 2). Provisional: no samples yet."""
+    def _doc_type_cues(self, lines: list[OCRLine]) -> int:
         texts = " ".join(normalize_arabic(l.text) or "" for l in lines)
-        cues = sum(1 for k in ("الهويه الوطنيه", "بطاقه الهويه", "national id") if k in texts)
+        low = " ".join((l.text or "").lower() for l in lines)
+        cues = sum(1 for k in ("الهويه الوطنيه", "بطاقه الهويه") if k in texts)
+        cues += sum(1 for k in ("id number", "date of birth", "expiry date", "dob:", "doe:", "dob", "doe") if k in low)
+        return cues
+
+    def _detect_doc_type(self, res: ExtractionResult, lines: list[OCRLine]) -> str:
+        """Saudi national ID ("الهوية الوطنية", English labels, number prefix 1) vs Iqama (prefix 2)."""
+        texts = " ".join(normalize_arabic(l.text) or "" for l in lines)
+        cues = self._doc_type_cues(lines)
         iq = res.value("iqama_no") or ""
         if cues >= 1 or (iq.startswith("1") and "هويه مقيم" not in texts):
+            if not res.value("nationality"):
+                res.set(FieldValue(field="nationality", raw_text=None, normalized=self.rules.config.national_id.nationality_code,
+                                   confidence=1.0, source="derived", note="national_id"))
             return "NATIONAL_ID"
         return "IQAMA"
 

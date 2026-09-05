@@ -56,6 +56,7 @@ retention:
 national_id:                           # Saudi national ID cards (provisional - awaiting samples)
   skip_checks: [EMPLOYER, OCCUPATION]
   nationality_code: SA
+  critical_fields: [iqama_no, expiry_date]
 
 permit:
   default_requesting_companies: ["قدرة العربية"]

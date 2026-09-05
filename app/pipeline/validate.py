@@ -20,8 +20,9 @@ def validate(x: ExtractionResult, rules: RulesSnapshot, today: date | None = Non
                 fv.confidence = round(fv.confidence * 0.8, 3)
                 fv.note = (fv.note or "") + " luhn_fail"
     iq = x.fields.get("iqama_no")
-    if iq and iq.normalized and iq.normalized[0] != "2":
-        x.warnings.append("iqama_no: does not start with 2")
+    expected_prefix = "1" if x.doc_type == "NATIONAL_ID" else "2"
+    if iq and iq.normalized and iq.normalized[0] != expected_prefix:
+        x.warnings.append(f"iqama_no: does not start with {expected_prefix} for {x.doc_type}")
         iq.confidence = round(iq.confidence * 0.5, 3)
     b, e = x.date_value("birth_date"), x.date_value("expiry_date")
     if b and e and b >= e:

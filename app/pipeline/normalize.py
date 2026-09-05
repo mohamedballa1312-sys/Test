@@ -67,7 +67,9 @@ def resolve_date(text: str | None) -> tuple[date | None, float, str]:
     d = parse_date(text)
     if d and 1900 <= d.year <= 2100:
         y4 = re.search(r"(\d{4})", normalize_digits(text) or "")
-        return d, 1.0, ("direct_hijri" if y4 and is_hijri_year(int(y4.group(1))) else "direct")
+        if y4 and is_hijri_year(int(y4.group(1))):
+            return d, 0.7, "direct_hijri"   # calendar conversion of an OCR'd Hijri date: needs the Gregorian copy or a human
+        return d, 1.0, "direct"
     chunks = _digit_chunks(text)
     if not chunks:
         return None, 0.0, "no_digits"

@@ -103,6 +103,7 @@ class RetentionRules(BaseModel):
 class NationalIdRules(BaseModel):
     skip_checks: list[Literal["NATIONALITY", "EXPIRY", "EMPLOYER", "OCCUPATION"]] = Field(default_factory=lambda: ["EMPLOYER", "OCCUPATION"])
     nationality_code: str = "SA"
+    critical_fields: list[str] = Field(default_factory=lambda: ["iqama_no", "expiry_date"])
 
 
 class PermitRules(BaseModel):

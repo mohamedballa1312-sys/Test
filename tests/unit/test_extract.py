@@ -105,3 +105,35 @@ def test_bare_employer_label_does_not_steal_new_layout(rules):
     x = Extractor(rules, None).extract(card_lines(), None, W, H)
     assert x.value("employer_id") == "7001234563"
     assert "الامل" in x.value("employer_name") or "الأمل" in x.value("employer_name")
+
+
+def national_id_lines():
+    """Current national-ID layout: Arabic labels with Hijri dates on the right, English labels with Gregorian dates on the left."""
+    return [
+        L("الهوية الوطنية", 350, 610, 90, 140), L("وزارة الداخلية", 930, 1100, 165, 200), L("رقم النسخة ٤", 460, 610, 170, 200),
+        L("محمد بن صالح بن مبارك الهذيلي البقمي", 800, 1230, 245, 285), L("ALBAQAMI, MOHAMMED SALEH B", 890, 1230, 285, 310),
+        L("رقم الهوية:", 1130, 1230, 350, 375), L("١٠٨٥٣٧٥٦٦٣", 975, 1110, 350, 375), L("ID Number:", 605, 715, 350, 375), L("1085375663", 730, 850, 350, 375),
+        L("تاريخ الميلاد:", 1125, 1230, 410, 435), L("١٤١٣/٠٥/١٠", 975, 1110, 410, 435), L("Date of Birth:", 605, 725, 410, 435), L("04/11/1992", 730, 835, 410, 435),
+        L("تاريخ الانتهاء:", 1125, 1230, 470, 495), L("١٤٥٤/١١/٢٦", 975, 1110, 470, 495), L("Expiry Date:", 605, 715, 470, 495), L("26/02/2033", 730, 835, 470, 495),
+        L("مكان الميلاد", 1105, 1220, 530, 555), L("الرياض", 1025, 1085, 530, 555),
+        L("يجب التحقق", 470, 580, 540, 560), L("من الرمز السريع", 450, 580, 565, 585),
+    ]
+
+
+def test_national_id_english_labels_and_cross_check(rules):
+    from app.pipeline.validate import validate
+    x = Extractor(rules, None).extract(national_id_lines(), None, 1280, 700)
+    validate(x, rules)
+    assert x.doc_type == "NATIONAL_ID"
+    assert x.value("iqama_no") == "1085375663" and x.fields["iqama_no"].confidence >= 0.8
+    assert x.value("expiry_date") == "2033-02-26" and "xcheck_ok" in (x.fields["expiry_date"].note or "")
+    assert x.value("birth_date") == "1992-11-04"
+    assert x.value("nationality") == "SA"
+    assert x.value("name_en") == "ALBAQAMI, MOHAMMED SALEH B"
+    assert x.value("employer_id") is None
+
+
+def test_national_id_mismatch_lowers_confidence(rules):
+    lines = [l for l in national_id_lines() if l.text != "26/02/2033"] + [L("26/03/2033", 730, 835, 470, 495)]
+    x = Extractor(rules, None).extract(lines, None, 1280, 700)
+    assert x.fields["expiry_date"].confidence <= 0.5 and any("disagree" in w for w in x.warnings)

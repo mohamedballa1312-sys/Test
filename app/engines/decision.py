@@ -58,7 +58,8 @@ def decide(x: ExtractionResult, rules: RulesSnapshot, clock: Clock | None = None
         # nothing read from a poor image is trustworthy, including a would-be hard fail
         return Decision(status="MANUAL_REVIEW", recommendation="NEEDS_ATTENTION",
                         review_triggers=[f"POOR_IMAGE (quality {x.quality_score:.2f} < {cfg.image.min_quality_score})"], **base)
-    for f in cfg.ocr.critical_fields:
+    critical = cfg.national_id.critical_fields if x.doc_type == "NATIONAL_ID" else cfg.ocr.critical_fields
+    for f in critical:
         fv = x.fields.get(f)
         if fv is None or fv.normalized in (None, ""):
             triggers.append(f"MISSING_FIELD:{f}")

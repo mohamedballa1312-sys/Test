@@ -46,6 +46,6 @@ def test_clean_text_strips_stray_letters():
 def test_hijri_dates_convert_to_gregorian():
     # older Iqama layouts print the expiry in Hijri (Umm al-Qura)
     assert parse_date("١٤٣٦/٠٦/١٢") == date(2015, 4, 1)
-    assert resolve_date("١٤٣٦/٠٦/١٢") == (date(2015, 4, 1), 1.0, "direct_hijri")
+    assert resolve_date("١٤٣٦/٠٦/١٢") == (date(2015, 4, 1), 0.7, "direct_hijri")   # Hijri-only never auto-rejects alone
     assert resolve_date("١٤٣٦٠٦١٢")[0] == date(2015, 4, 1)
     assert parse_date("١٩٨٩/٠١/٠١") == date(1989, 1, 1)   # Gregorian untouched
