@@ -280,6 +280,32 @@ class Extractor:
             fe = FieldValue(field="name_en", raw_text=txt, normalized=txt.upper() if txt else None, confidence=round(float(np.mean([l.confidence for l in en_row])), 3), bbox=_union(en_row), source="ocr")
         return fa, fe
 
+    # ---------- text refinement (second OCR pass on the value crop, magnified) ----------
+    TEXT_PASS_FIELDS = {"occupation", "employer_name", "nationality", "birth_place", "work_place", "issue_place"}
+    TEXT_PASS_BELOW = 0.75
+
+    def _text_pass(self, image: np.ndarray, boxes: list[OCRLine]) -> tuple[str, float] | None:
+        """Re-read a value region at 2.5x: small Arabic words on screenshots gain a lot from magnification."""
+        if self.provider is None or not boxes or image is None:
+            return None
+        x, y, w, h = _union(boxes)
+        H, W = image.shape[:2]
+        crop = image[max(0, y - int(0.5 * h)):min(H, y + h + int(0.5 * h)), max(0, x - int(0.6 * h)):min(W, x + w + int(0.6 * h))]
+        if crop.size == 0:
+            return None
+        try:
+            import cv2
+            up = cv2.resize(crop, None, fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+            lines = [l for l in self.provider.read(up) if has_arabic(l.text)]
+        except Exception:
+            return None
+        if not lines:
+            return None
+        lines.sort(key=lambda l: -l.x1)   # right -> left reading order
+        text = clean_text(" ".join(l.text for l in lines))
+        conf = float(np.mean([l.confidence for l in lines]))
+        return (text, conf) if text else None
+
     # ---------- numeric refinement (second OCR pass, digits only) ----------
     def _digits_pass(self, image: np.ndarray, boxes: list[OCRLine], want_len: int = 10) -> tuple[str, float] | None:
         if self.provider is None or not boxes or image is None:
@@ -397,6 +423,11 @@ class Extractor:
                             fv.confidence = round(fv.confidence * 0.6, 3); fv.note = (fv.note or "") + f" xcheck_mismatch({d_sec.isoformat()})"
                             res.warnings.append(f"{fld}: Hijri/Gregorian copies disagree ({d.isoformat()} vs {d_sec.isoformat()})")
             elif fld == "nationality":
+                if conf < self.TEXT_PASS_BELOW and image is not None and (a.value_lines or not a.inline_value):
+                    second = self._text_pass(image, a.value_lines or self._blind_crop(image, a.line, W, frac=0.12, ext=0.0))
+                    if second and resolve_nationality(second[0], self.rules)[0] and second[1] > value_conf:
+                        raw, value_conf = second[0], second[1]
+                        conf = value_conf * _label_factor(a.score); fv.raw_text = raw; fv.note = "text_pass"
                 code, mult, note = resolve_nationality(raw, self.rules)
                 fv.normalized = code
                 # an exact hit in a closed vocabulary is strong evidence even when OCR confidence is modest
@@ -406,6 +437,11 @@ class Extractor:
                 digits = re.sub(r"\D", "", (raw or "").translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")))
                 fv.normalized = digits or None
             else:
+                if fld in self.TEXT_PASS_FIELDS and conf < self.TEXT_PASS_BELOW and image is not None and (a.value_lines or not a.inline_value):
+                    second = self._text_pass(image, a.value_lines or self._blind_crop(image, a.line, W, frac=0.22, ext=0.0))
+                    if second and second[1] > value_conf + 0.1:
+                        raw, value_conf = second[0], second[1]
+                        fv.raw_text = raw; fv.confidence = round(value_conf * _label_factor(a.score), 3); fv.note = "text_pass"
                 fv.normalized = clean_text(raw)
             res.set(fv)
 

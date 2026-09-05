@@ -12,10 +12,12 @@ class EasyOCRProvider:
     name = "easyocr"
     sends_data_externally = False
 
-    def __init__(self, langs: tuple[str, ...] = ("ar", "en"), gpu: bool = False) -> None:
+    def __init__(self, langs: tuple[str, ...] = ("ar", "en"), gpu: bool = False, read_kwargs: dict | None = None) -> None:
         import easyocr  # heavy import kept local
 
         self._reader = easyocr.Reader(list(langs), gpu=gpu, verbose=False)
+        # detector/recogniser tuning (mag_ratio, text_threshold, low_text, canvas_size ...) - benchmarked in Phase 5
+        self.read_kwargs: dict = dict(read_kwargs or {})
 
     @staticmethod
     def _to_lines(results) -> list[OCRLine]:
@@ -27,7 +29,7 @@ class EasyOCRProvider:
         return out
 
     def read(self, image: np.ndarray) -> list[OCRLine]:
-        return self._to_lines(self._reader.readtext(image, paragraph=False))
+        return self._to_lines(self._reader.readtext(image, paragraph=False, **self.read_kwargs))
 
     def read_digits(self, crop: np.ndarray) -> tuple[str, float]:
         res = self._reader.readtext(crop, paragraph=False, allowlist=_DIGITS, detail=1)
