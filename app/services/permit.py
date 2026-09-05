@@ -167,7 +167,10 @@ class PermitGenerator:
                 if "<w:rPr>" in run:
                     rpr = re.search(r"<w:rPr>.*?</w:rPr>", run, re.S).group(0)
                     inner = re.sub(r"<w:(b|bCs|sz|szCs)(?: [^>]*)?/>", "", rpr[7:-8])
-                    return run.replace(rpr, f"<w:rPr>{inner}{sz}</w:rPr>", 1)
+                    # schema order: rStyle, rFonts, b, bCs, ..., sz, szCs, ..., rtl -> put the leading ones first
+                    lead = "".join(re.findall(r"<w:(?:rStyle|rFonts)[^>]*/>", inner))
+                    rest = re.sub(r"<w:(?:rStyle|rFonts)[^>]*/>", "", inner)
+                    return run.replace(rpr, f"<w:rPr>{lead}{sz}{rest}</w:rPr>", 1)
                 return run.replace(">", f">{'<w:rPr>' + sz + '</w:rPr>'}", 1) if run.startswith("<w:r>") else run
             new_para = _RUN.sub(lambda mm: bump(mm.group(0)), para)
             xml = xml.replace(para, new_para, 1)
@@ -182,8 +185,11 @@ class PermitGenerator:
         if not m:
             return xml
         para = m.group(0)
-        props = "<w:pageBreakBefore/><w:keepNext/>"
-        if "<w:pPr>" in para:
+        props = "<w:keepNext/><w:pageBreakBefore/>"   # schema order: pStyle, keepNext, keepLines, pageBreakBefore, ...
+        ps = re.search(r"<w:pStyle [^>]*/>", para)
+        if ps:
+            new = para.replace(ps.group(0), ps.group(0) + props, 1)
+        elif "<w:pPr>" in para:
             new = para.replace("<w:pPr>", "<w:pPr>" + props, 1)
         else:
             new = para.replace(">", f"><w:pPr>{props}</w:pPr>", 1)
