@@ -154,11 +154,40 @@ class PermitGenerator:
             raise PermitTemplateError(f"expected 5 tables in the permit template, found {len(self.tables)}")
 
     # ---- slots ----
+    DATE_FONT_HALF_POINTS = 28   # 14 pt, bold - user feedback: the date line must stand out
+
     def _fill_dates(self, xml: str, d: date) -> str:
         g = d.strftime("%Y/%m/%d")
+        # the whole date paragraph gets a larger bold font (labels and values alike)
+        m = re.search(r"<w:p[ >](?:(?!</w:p>).)*?التـاريخ(?:(?!</w:p>).)*?</w:p>", xml, re.S)
+        if m:
+            para = m.group(0)
+            def bump(run: str) -> str:
+                sz = f'<w:b/><w:bCs/><w:sz w:val="{self.DATE_FONT_HALF_POINTS}"/><w:szCs w:val="{self.DATE_FONT_HALF_POINTS}"/>'
+                if "<w:rPr>" in run:
+                    rpr = re.search(r"<w:rPr>.*?</w:rPr>", run, re.S).group(0)
+                    inner = re.sub(r"<w:(b|bCs|sz|szCs)(?: [^>]*)?/>", "", rpr[7:-8])
+                    return run.replace(rpr, f"<w:rPr>{inner}{sz}</w:rPr>", 1)
+                return run.replace(">", f">{'<w:rPr>' + sz + '</w:rPr>'}", 1) if run.startswith("<w:r>") else run
+            new_para = _RUN.sub(lambda mm: bump(mm.group(0)), para)
+            xml = xml.replace(para, new_para, 1)
         xml = xml.replace("تاريخ الاصدار)", f"{g})", 1)
         xml = xml.replace("(تاريخ الاصدار هجري)", f"({hijri_str(d)})", 1)
         return xml
+
+    def _images_heading_on_new_page(self, xml: str) -> str:
+        """The images section heading must sit on the same page as the images: start it on a fresh page
+        and keep it with the table that follows."""
+        m = re.search(r"<w:p[ >](?:(?!</w:p>).)*?الهوية الوطنية / الاقامة(?:(?!</w:p>).)*?</w:p>", xml, re.S)
+        if not m:
+            return xml
+        para = m.group(0)
+        props = "<w:pageBreakBefore/><w:keepNext/>"
+        if "<w:pPr>" in para:
+            new = para.replace("<w:pPr>", "<w:pPr>" + props, 1)
+        else:
+            new = para.replace(">", f"><w:pPr>{props}</w:pPr>", 1)
+        return xml.replace(para, new, 1)
 
     def _fill_project(self, xml: str, data: PermitData) -> str:
         t0 = self.tables[0]
@@ -276,6 +305,7 @@ class PermitGenerator:
         ids = [int(x) for x in re.findall(r'<wp:docPr id="(\d+)"', xml)]
         docpr = max(ids or [100]) + 1000
         xml = self._fill_dates(xml, data.issue_date)
+        xml = self._images_heading_on_new_page(xml)
         xml = self._fill_project(xml, data)
         xml, docpr = self._fill_team(xml, data, docpr)
         xml, docpr, media, rels = self._build_images(xml, data, docpr)
