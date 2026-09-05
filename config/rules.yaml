@@ -7,7 +7,7 @@ image:
   upscale_below_px: 1200
 
 ocr:
-  provider: paddle            # paddle | easyocr | mock  (env IQAMA_OCR_PROVIDER overrides)
+  provider: easyocr           # easyocr (validated, default) | paddle (untested here) | mock  (env IQAMA_OCR_PROVIDER overrides)
   min_field_confidence: 0.75  # for critical fields
   critical_fields: [iqama_no, expiry_date, nationality, employer_id, occupation]
   external:

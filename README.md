@@ -17,7 +17,7 @@ Design documents: [`docs/01-requirements-analysis.md`](docs/01-requirements-anal
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pip install easyocr            # or: pip install paddlepaddle paddleocr   (set IQAMA_OCR_PROVIDER=paddle)
+pip install easyocr            # default provider (validated on 100 real cards). PaddleOCR is wired but untested: pip install paddlepaddle paddleocr; IQAMA_OCR_PROVIDER=paddle
 cp .env.example .env           # optional; defaults work for a local trial
 
 uvicorn app.main:app --port 8000                 # API  → http://127.0.0.1:8000/docs
