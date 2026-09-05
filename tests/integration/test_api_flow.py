@@ -99,8 +99,8 @@ def test_full_flow(api, restore_occupations):
         d = Document(_io.BytesIO(p.content))
         team = d.tables[1]
         assert team.rows[1].cells[4].text == "ابوبكر عباس الزبير عباس" and team.rows[1].cells[2].text == "قدرة العربية"
-        assert team.rows[1].cells[1].text == "2627946219"           # the form needs the full number
-        assert d.tables[3].rows and "ابوبكر" in d.tables[3].rows[0].cells[1].text   # card image + caption
+        assert team.rows[1].cells[1].text.replace("\u200e", "") == "2627946219"   # the form needs the full number
+        assert d.tables[2].rows and "ابوبكر" in d.tables[2].rows[0].cells[1].text   # card image + caption
         assert api.get(f"/api/v1/batches/{bid}").json()["permit_exported_at"]
 
     # exports

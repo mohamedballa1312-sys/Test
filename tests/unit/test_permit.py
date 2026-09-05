@@ -69,16 +69,16 @@ def test_fills_dates_project_team_and_images():
     out = gen.render_docx(data)
     d = _read(out)
     text = "\n".join(p.text for p in d.paragraphs)
-    assert "2026/09/05" in text and hijri_str(date(2026, 9, 5)) in text
+    assert "05/09/2026" in text and hijri_str(date(2026, 9, 5)) in text
     assert d.tables[0].rows[0].cells[0].text == "مشروع أ" and d.tables[0].rows[1].cells[0].text == "الرياض"
     team = d.tables[1]
-    assert [c.text for c in team.rows[1].cells][1:] == ["2400000001", "قدرة العربية", "السودان", "عامل 1", "1"]
-    assert team.rows[4].cells[4].text == "مرفوض" and team.rows[5].cells[4].text == ""     # unapproved still listed (caller filters), rows beyond stay empty
+    assert [c.text.replace("\u200e", "") for c in team.rows[1].cells][1:] == ["2400000001", "قدرة العربية", "السودان", "عامل 1", "1"]
+    assert len(team.rows) == 1 + 4 and team.rows[4].cells[4].text == "مرفوض"           # header + exactly one row per worker
     xml = zipfile.ZipFile(io.BytesIO(out)).read("word/document.xml").decode()
     assert xml.count('r:embed="rId9"') >= 3 + 3           # stamp in 3 approved notes cells + on 3 images (template stamps removed/replaced)
     assert len(zipfile.ZipFile(io.BytesIO(out)).namelist()) >= 6 and any("iqama_" in n for n in zipfile.ZipFile(io.BytesIO(out)).namelist())
-    # images table: 3 images -> 2 rows, captions present
-    imgs = d.tables[3]
+    # images table: 3 images -> 2 rows, captions present (tables: project, team, images)
+    imgs = d.tables[2]
     assert len(imgs.rows) == 2 and "عامل 1" in imgs.rows[0].cells[1].text and "عامل 3" in imgs.rows[1].cells[1].text
 
 
@@ -87,7 +87,8 @@ def test_more_than_27_workers_adds_rows():
     workers = [Worker(name=f"w{i}", nationality="n", company="c", id_number=str(2400000000 + i), approved=True) for i in range(1, 31)]
     out = gen.render_docx(PermitData(issue_date=date(2026, 1, 1), workers=workers))
     d = _read(out)
-    assert len(d.tables[2].rows) == 18 and d.tables[2].rows[-1].cells[5].text == "30" and d.tables[2].rows[-1].cells[4].text == "w30"
+    assert len(d.tables[1].rows) == 31 and d.tables[1].rows[-1].cells[5].text == "30" and d.tables[1].rows[-1].cells[4].text == "w30"
+    assert len(d.tables) == 3   # the second fixed table is gone
 
 
 def test_rejects_wrong_template():

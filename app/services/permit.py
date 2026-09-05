@@ -56,7 +56,7 @@ def hijri_str(d: date) -> str:
     try:
         from hijridate import Gregorian
         h = Gregorian(d.year, d.month, d.day).to_hijri()
-        return f"{h.year:04d}/{h.month:02d}/{h.day:02d} هـ"
+        return f"{h.day:02d}/{h.month:02d}/{h.year:04d} هـ"
     except Exception:
         return ""
 
@@ -69,8 +69,20 @@ _TC = re.compile(r"<w:tc>.*?</w:tc>", re.S)
 _RUN = re.compile(r"<w:r[ >].*?</w:r>|<w:r>.*?</w:r>", re.S)
 
 
+LRM = "\u200e"
+
+
 def _esc(s: str) -> str:
     return html.escape(s or "", quote=False)
+
+
+def _ltr(s: str) -> str:
+    """Numbers and dates inside RTL text: mark as left-to-right so 2026/09/05 is not mirrored by bidi."""
+    return f"{LRM}{s}{LRM}" if s else s
+
+
+def _fmt_date(d: date) -> str:
+    return d.strftime("%d/%m/%Y")
 
 
 def _cell_text(tc: str) -> str:
@@ -154,7 +166,7 @@ class PermitGenerator:
             raise PermitTemplateError(f"expected 5 tables in the permit template, found {len(self.tables)}")
 
     # ---- slots ----
-    DATE_FONT_HALF_POINTS = 28   # 14 pt, bold - user feedback: the date line must stand out
+    DATE_FONT_HALF_POINTS = 32   # 16 pt, bold - user feedback: the date line must stand out
 
     def _fill_dates(self, xml: str, d: date) -> str:
         g = d.strftime("%Y/%m/%d")
@@ -173,9 +185,11 @@ class PermitGenerator:
                     return run.replace(rpr, f"<w:rPr>{lead}{sz}{rest}</w:rPr>", 1)
                 return run.replace(">", f">{'<w:rPr>' + sz + '</w:rPr>'}", 1) if run.startswith("<w:r>") else run
             new_para = _RUN.sub(lambda mm: bump(mm.group(0)), para)
+            # drop the lone-space run between "(" and the value (renders as "( 05/09/2026)")
+            new_para = re.sub(r"<w:r>(?:<w:rPr>(?:(?!</w:rPr>).)*</w:rPr>)?<w:t xml:space=\"preserve\"> </w:t></w:r>", "", new_para, count=1)
             xml = xml.replace(para, new_para, 1)
-        xml = xml.replace("تاريخ الاصدار)", f"{g})", 1)
-        xml = xml.replace("(تاريخ الاصدار هجري)", f"({hijri_str(d)})", 1)
+        xml = xml.replace("تاريخ الاصدار)", f"{_ltr(_fmt_date(d))})", 1)
+        xml = xml.replace("(تاريخ الاصدار هجري)", f"({_ltr(hijri_str(d))})", 1)
         return xml
 
     def _images_heading_on_new_page(self, xml: str) -> str:
@@ -185,7 +199,7 @@ class PermitGenerator:
         if not m:
             return xml
         para = m.group(0)
-        props = "<w:keepNext/><w:pageBreakBefore/>"   # schema order: pStyle, keepNext, keepLines, pageBreakBefore, ...
+        props = "<w:keepNext/><w:keepLines/>"   # heading travels with the first image row; no forced page break (blank pages)
         ps = re.search(r"<w:pStyle [^>]*/>", para)
         if ps:
             new = para.replace(ps.group(0), ps.group(0) + props, 1)
@@ -198,7 +212,7 @@ class PermitGenerator:
     def _fill_project(self, xml: str, data: PermitData) -> str:
         t0 = self.tables[0]
         rows = _TR.findall(t0)
-        values = [data.project_name, data.project_location, data.work_start, data.work_end_expected]
+        values = [data.project_name, data.project_location, _ltr(data.work_start), _ltr(data.work_end_expected)]
         new_t0 = t0
         for row, val in zip(rows, values):
             cells = _TC.findall(row)
@@ -207,52 +221,43 @@ class PermitGenerator:
             new_t0 = new_t0.replace(row, new_row, 1)
         return xml.replace(t0, new_t0, 1)
 
+    ROW_HEIGHT_TWIPS = 560   # ~1 cm minimum; grows with content (stamp rows)
+
     def _fill_team(self, xml: str, data: PermitData, docpr_start: int) -> tuple[str, int]:
+        """The template's two fixed tables (12 + 15 rows) become ONE table with exactly len(workers) rows,
+        a repeating header and rows that never split across pages. No 27-row limit."""
         t1, t2 = self.tables[1], self.tables[2]
-        rows1, rows2 = _TR.findall(t1), _TR.findall(t2)
-        header, body_rows = rows1[0], rows1[1:] + rows2
-        # stamp drawing + text style come from the first data row
-        first_cells = _TC.findall(body_rows[0])
+        rows1 = _TR.findall(t1)
+        header, first, pattern = rows1[0], rows1[1], rows1[2]
+        first_cells = _TC.findall(first)
         stamp_run = next((r for r in _RUN.findall(first_cells[0]) if "<w:drawing" in r), "")
         rpr = _first_rpr(first_cells[4]) or _first_rpr(first_cells[1])
-        # extra rows: clone the last row pattern
-        row_template = rows2[-1]
-        workers = data.workers
-        all_rows = list(body_rows)
-        n_extra = max(0, len(workers) - len(all_rows))
-        extra_rows = []
-        for k in range(n_extra):
-            extra_rows.append(row_template)
+        # header repeats on every page
+        if "<w:tblHeader/>" not in header:
+            header = header.replace("<w:trPr>", "<w:trPr><w:tblHeader/>", 1) if "<w:trPr>" in header else header.replace(">", "><w:trPr><w:tblHeader/></w:trPr>", 1)
+        trpr = f'<w:trPr><w:cantSplit/><w:trHeight w:val="{self.ROW_HEIGHT_TWIPS}" w:hRule="atLeast"/></w:trPr>'
+        pattern = re.sub(r"<w:trPr>.*?</w:trPr>", trpr, pattern, count=1, flags=re.S) if "<w:trPr>" in pattern else pattern.replace(">", ">" + trpr, 1)
         docpr = docpr_start
-
-        def build(row_xml: str, idx: int, w: Worker | None) -> str:
-            cells = _TC.findall(row_xml)
-            new = row_xml
-            vals = {5: str(idx + 1)}
-            if w:
-                vals.update({4: w.name, 3: w.nationality, 2: w.company, 1: w.id_number, 0: w.note})
-            for ci, cell in enumerate(cells):
-                text = vals.get(ci, "")
+        cells_tpl = _TC.findall(pattern)
+        out_rows = []
+        for idx, w in enumerate(data.workers):
+            vals = {5: str(idx + 1), 4: w.name, 3: w.nationality, 2: w.company, 1: _ltr(w.id_number), 0: w.note}
+            row = pattern
+            for ci, cell in enumerate(cells_tpl):
                 cell_rpr = _first_rpr(cell) or rpr
-                if ci == 0:
-                    # notes cell: drop template drawings, add the stamp for approved workers
-                    nc = _set_cell(cell, text, cell_rpr, keep_drawings=False)
-                    if w and w.approved and data.stamp_approved_rows and stamp_run:
-                        nonlocal docpr
-                        stamped, docpr = _renumber_docpr(stamp_run, docpr)
-                        nc = nc.replace("</w:p>", stamped + "</w:p>", 1)
-                    new = new.replace(cell, nc, 1)
-                else:
-                    new = new.replace(cell, _set_cell(cell, text, cell_rpr), 1)
-            return new
-
-        filled1 = [build(r, i, workers[i] if i < len(workers) else None) for i, r in enumerate(body_rows[:len(rows1) - 1])]
-        offset = len(rows1) - 1
-        filled2 = [build(r, offset + i, workers[offset + i] if offset + i < len(workers) else None) for i, r in enumerate(rows2)]
-        filled2 += [build(r, len(all_rows) + k, workers[len(all_rows) + k]) for k, r in enumerate(extra_rows)]
-        new_t1 = t1.replace("".join(rows1), header + "".join(filled1), 1)
-        new_t2 = t2.replace("".join(rows2), "".join(filled2), 1)
-        xml = xml.replace(t1, new_t1, 1).replace(t2, new_t2, 1)
+                nc = _set_cell(cell, vals.get(ci, ""), cell_rpr, keep_drawings=False)
+                if ci == 0 and w.approved and data.stamp_approved_rows and stamp_run:
+                    stamped, docpr = _renumber_docpr(stamp_run, docpr)
+                    nc = nc.replace("</w:p>", stamped + "</w:p>", 1)
+                row = row.replace(cell, nc, 1)
+            out_rows.append(row)
+        if not out_rows:
+            out_rows.append(pattern)
+        new_t1 = t1.replace("".join(rows1), header + "".join(out_rows), 1)
+        # remove the second table and the spacer paragraph that sat between the two
+        i1 = xml.find(t1); i2 = xml.find(t2)
+        between = xml[i1 + len(t1):i2] if 0 <= i1 < i2 else ""
+        xml = xml.replace(t1 + between + t2, new_t1, 1) if between and (t1 + between + t2) in xml else xml.replace(t1, new_t1, 1).replace(t2, "", 1)
         return xml, docpr
 
     def _build_images(self, xml: str, data: PermitData, docpr_start: int) -> tuple[str, int, dict[str, bytes], list[tuple[str, str]]]:
