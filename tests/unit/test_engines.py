@@ -55,7 +55,7 @@ def test_occupation_matching(rules, make_x):
     row, conf, method = match_occupation("سائق  خاص.", rules)
     assert row is not None
     assert check_occupation(make_x(occupation="سائق خاص"), rules).outcome == "FAIL"
-    r = check_occupation(make_x(occupation="عامل تحميل وتنزيل"), rules)
+    r = check_occupation(make_x(occupation="مهنة غير موجودة"), rules)
     assert r.outcome == "REVIEW" and r.label == "UNKNOWN"          # ALLOWLIST: unlisted -> review
 
 
@@ -77,7 +77,7 @@ def test_decision_matrix_on_samples(rules, make_x, clock):
     assert d1.status == "REJECTED" and len(d1.reasons) == 3
     assert d1.reasons[0].startswith("Iqama Expired") and d1.reasons[1] == "Individual Employer" and "Private Driver" in d1.reasons[2]
     d2 = decide(make_x(**S2), rules, clock)
-    assert d2.status == "MANUAL_REVIEW" and d2.recommendation == "NEEDS_ATTENTION"
+    assert d2.status == "MANUAL_REVIEW" and d2.recommendation == "RECOMMEND_APPROVE"   # occupation seeded eligible, no auto-approve
     d3 = decide(make_x(**S3), rules, clock)
     assert d3.status == "REJECTED" and d3.reasons == ["Iqama Expired (2026-04-02, -155 days)"]
 
@@ -120,3 +120,27 @@ def test_rules_validation_rejects_bad_file(rules):
     files["occupations.csv"] = "code,occupation_ar\n,x\n"   # missing eligible column
     with pytest.raises(RulesLoadError):
         RulesSnapshot(files)
+
+
+def test_individual_with_eligible_occupation_goes_to_review(rules, make_x, clock):
+    # Rules v1.1: individual sponsor + listed eligible occupation -> human decision, not auto-reject
+    x = make_x(iqama_no="2401246992", expiry_date="2027-02-13", nationality="SD", occupation="أخصائي تسويق",
+               employer_id="1070000009", employer_name="نايف مانع")
+    d = decide(x, rules, clock)
+    assert d.status == "MANUAL_REVIEW"
+    assert any("Individual employer with eligible occupation" in t for t in d.review_triggers)
+    # ...but individual + excluded occupation still rejects outright (sample 1), and individual + unlisted too
+    assert decide(make_x(**S1), rules, clock).status == "REJECTED"
+    x2 = make_x(iqama_no="2401246992", expiry_date="2027-02-13", nationality="SD", occupation="مهنة غير مدرجة",
+                employer_id="1070000009")
+    assert decide(x2, rules, clock).status == "REJECTED"
+    # switching the rule off restores the direct rejection
+    from app.engines.rules import RulesSnapshot
+    files = dict(rules.files)
+    files["rules.yaml"] = files["rules.yaml"].replace("individual_with_eligible_occupation: REVIEW", "individual_with_eligible_occupation: REJECT")
+    assert decide(x, RulesSnapshot(files), clock).status == "REJECTED"
+
+
+def test_seeded_occupations_are_eligible(rules, make_x, clock):
+    d = decide(make_x(**{**S2, "expiry_date": "2027-01-01"}), rules, clock)   # عامل تحميل وتنزيل now listed
+    assert d.status == "MANUAL_REVIEW" and d.recommendation == "RECOMMEND_APPROVE"

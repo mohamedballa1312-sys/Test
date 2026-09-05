@@ -23,11 +23,24 @@ def run_checks(x: ExtractionResult, rules: RulesSnapshot, clock: Clock | None = 
     return [_CHECKS[name](x, rules, clock) for name in rules.config.checks.order]
 
 
+def _apply_cross_check_rules(checks: list[CheckResult], rules: RulesSnapshot) -> None:
+    """Rules that depend on two checks at once (Rules v1.1)."""
+    by = {c.check: c for c in checks}
+    emp, occ = by.get("EMPLOYER"), by.get("OCCUPATION")
+    if (rules.config.employer.individual_with_eligible_occupation == "REVIEW" and emp and occ
+            and emp.outcome == "FAIL" and emp.label == "INDIVIDUAL"
+            and occ.outcome == "PASS" and occ.label == "ELIGIBLE"):
+        emp.outcome = "REVIEW"
+        emp.reason = f"Individual employer with eligible occupation ({occ.details.get('matched_ar') or occ.details.get('raw')}) - human decision"
+        emp.evidence.append({"layer": "xrule", "signal": "individual_with_eligible_occupation", "action": "REVIEW"})
+
+
 def decide(x: ExtractionResult, rules: RulesSnapshot, clock: Clock | None = None, *,
            decided_by: str = "system", version: int = 1) -> Decision:
     cfg = rules.config
     clock = clock or Clock(cfg.expiry.timezone)
     checks = run_checks(x, rules, clock)
+    _apply_cross_check_rules(checks, rules)
     now = clock.now()
     base = dict(checks=checks, rules_version=rules.version, decided_at=now, decided_by=decided_by,
                 version=version, quality_score=x.quality_score)

@@ -1,5 +1,5 @@
 # Rules v1 — from user decisions 2026-09-04. Change here, never in code.
-version_note: "Rules v1 - 2026-09-04"
+version_note: "Rules v1.1 - 2026-09-05 (individual+eligible occupation -> review; occupations seeded)"
 
 image:
   min_quality_score: 0.45
@@ -27,6 +27,7 @@ expiry:
 
 employer:
   individual_auto_reject_threshold: 0.85
+  individual_with_eligible_occupation: REVIEW   # REJECT | REVIEW  (v1.1: individual + listed-eligible occupation -> human)
   id_prefix_map: { "1": INDIVIDUAL, "2": INDIVIDUAL, "7": COMPANY }
   rules_file: employer_rules.yaml
   reference_file: employers_reference.csv

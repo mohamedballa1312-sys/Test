@@ -59,6 +59,9 @@ class ExpiryRules(BaseModel):
 
 class EmployerRules(BaseModel):
     individual_auto_reject_threshold: float = 0.85
+    # Rules v1.1 (user decision, Phase 4): an individual sponsor is rejected outright unless the
+    # occupation is a listed eligible one, in which case the card goes to a human instead.
+    individual_with_eligible_occupation: Literal["REJECT", "REVIEW"] = "REVIEW"
     id_prefix_map: dict[str, Literal["INDIVIDUAL", "COMPANY", "GOVERNMENT"]] = Field(
         default_factory=lambda: {"1": "INDIVIDUAL", "2": "INDIVIDUAL", "7": "COMPANY"}
     )

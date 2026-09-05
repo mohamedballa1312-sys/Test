@@ -4,3 +4,17 @@ code,occupation_ar,occupation_en,category,eligible,reason,aliases,updated_by,upd
 ,راعي مواشي,Livestock Herder,Individual/Excluded,No,Excluded occupation,راعي غنم|راعي إبل|راعي ابل|راعي|راعي اغنام,admin,2026-09-04
 ,سائق خاص,Private Driver,Individual/Excluded,No,Excluded occupation,سائق منزل|سائق عائلة|سائق عائله|سائق خاص للعائلة,admin,2026-09-04
 ,عامل منزلي,Domestic Worker,Individual/Excluded,No,Excluded occupation,عاملة منزلية|عامل منزل|خادم|خادمة|عاملة منزل,user,2026-09-05
+,عامل تحميل وتنزيل,Loading and Unloading Worker,Eligible,Yes,Approved by user 2026-09-05,عامل تحميل|عامل تنزيل|عامل تحميل و تنزيل,user,2026-09-05
+,عامل إنشاءات,Construction Worker,Eligible,Yes,Approved by user 2026-09-05,عامل انشاءات|عامل إنشاء|عامل انشاء,user,2026-09-05
+,كهربائي مباني,Building Electrician,Eligible,Yes,Approved by user 2026-09-05,كهرباني مباني|كهربائي مبانى|كهربائي,user,2026-09-05
+,موصل كابلات كهربائية,Electrical Cable Installer,Eligible,Yes,Approved by user 2026-09-05,موصل كابلات كهربانية|موصل كابلات|موصل كيابل كهربائية,user,2026-09-05
+,عامل بناء,Builder,Eligible,Yes,Approved by user 2026-09-05,عامل بنا|عامل بناء عام,user,2026-09-05
+,مندوب مبيعات,Sales Representative,Eligible,Yes,Approved by user 2026-09-05,مندوب مبيعات|مندوب بيع,user,2026-09-05
+,مدير تسويق,Marketing Manager,Eligible,Yes,Approved by user 2026-09-05,مديرتسويق|مدير التسويق,user,2026-09-05
+,أخصائي تسويق,Marketing Specialist,Eligible,Yes,Approved by user 2026-09-05,اخصائي تسويق|أخصائي تسويق|اخصائى تسويق,user,2026-09-05
+,مهندس إلكترونيات,Electronics Engineer,Eligible,Yes,Approved by user 2026-09-05,مهندس الكترونيات|مهندس إلكتروني,user,2026-09-05
+,مهندس كهربائي,Electrical Engineer,Eligible,Yes,Approved by user 2026-09-05,مهندس كهرباء|مهندس كهربائى,user,2026-09-05
+,فني شبكات اتصالات,Telecom Networks Technician,Eligible,Yes,Approved by user 2026-09-05,فني شبكات|فني اتصالات|فني شبكات إتصالات,user,2026-09-05
+,فني صيانة أجهزة كهربائية,Electrical Appliances Maintenance Technician,Eligible,Yes,Approved by user 2026-09-05,فني صيانة اجهزة كهربائية|فني صيانة أجهزة|فني صيانة,user,2026-09-05
+,عامل فرز منتجات,Product Sorting Worker,Eligible,Yes,Approved by user 2026-09-05,عامل فرز|عامل فرز المنتجات,user,2026-09-05
+,عامل ورشة,Workshop Worker,Eligible,Yes,Approved by user 2026-09-05,عامل ورشه|عامل ورش,user,2026-09-05
