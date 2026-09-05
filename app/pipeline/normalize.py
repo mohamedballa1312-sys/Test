@@ -82,13 +82,25 @@ def resolve_date(text: str | None) -> tuple[date | None, float, str]:
             if is_hijri_year(y):
                 g = hijri_to_gregorian(y, mo, dd_)
                 if g:
-                    return g, 0.8 if how == "natural" else 0.75, f"8digits_hijri_{how}"
+                    return g, 0.7 if how == "natural" else 0.65, f"8digits_hijri_{how}"
             try:
                 dd = date(y, mo, dd_)
                 if 1900 <= dd.year <= 2100:
-                    return dd, 0.85 if how == "natural" else 0.8, f"8digits_{how}"
+                    return dd, 0.7 if how == "natural" else 0.65, f"8digits_{how}"
             except ValueError:
                 pass
+        # YYYYMMDD followed by 1-2 residue digits (a colon or label stroke inside the crop)
+        if len(s) in (9, 10):
+            head = s[:8]
+            y, mo, dd_ = int(head[:4]), int(head[4:6]), int(head[6:8])
+            g = hijri_to_gregorian(y, mo, dd_) if is_hijri_year(y) else None
+            if g is None:
+                try:
+                    g = date(y, mo, dd_) if 1900 <= y <= 2100 else None
+                except ValueError:
+                    g = None
+            if g:
+                return g, 0.7, f"8digits_trailing_{how}"
         # YY/MM/DD (leading century digits lost)
         if len(s) == 6 and len(seq) == 3:
             try:
@@ -123,6 +135,8 @@ def _repair_separator_misread(s: str) -> date | None:
             return r
         if s[4] in _SEP_LOOKALIKES and (r := _try(s[:4], s[5:7], s[7:9])):
             return r
+    if n == 10 and s[4] == s[7] and s[4] in "781":                        # YYYY?MM?DD, same lookalike twice
+        return _try(s[:4], s[5:7], s[8:10])
     if n == 10 and s[4] in _SEP_LOOKALIKES and s[7] in _SEP_LOOKALIKES:   # YYYY?MM?DD
         return _try(s[:4], s[5:7], s[8:10])
     return None

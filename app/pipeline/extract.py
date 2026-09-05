@@ -91,6 +91,7 @@ class Extractor:
     def _best_label(self, text: str, *, anchored_start: bool, relaxed: bool = False) -> tuple[str, float, int, int] | None:
         """Best (field, score, start, end) for a label inside `text` (normalized)."""
         best = None
+        best_key = None
         for fld, lab in self.labels:
             if len(text) < 3:
                 continue
@@ -98,16 +99,17 @@ class Extractor:
             if al is None:
                 continue
             score = al.score
-            # penalise matches that don't sit at the start when we expect a leading label
-            if anchored_start and al.dest_start > 3:
-                score -= 15
             # short labels (المهنة, الجنسية, الرقم) need a stricter score to avoid matching inside values
             if len(lab) <= 7 and score < (LABEL_MIN_SCORE + 6 if not relaxed else RIGHT_COLUMN_LABEL_MIN):
                 continue
-            # a bare substring label ("صاحب العمل") must not beat its longer form ("هوية صاحب العمل"): longer wins ties
+            # a bare substring label ("صاحب العمل", "الميلاد") must not beat its longer form: longer wins ties
             score += 0.01 * len(lab)
-            if best is None or score > best[1]:
-                best = (fld, score, al.dest_start, al.dest_end)
+            # a label sits at the START of a line (leading) or at the END of a pre-colon head (suffix);
+            # a match in the right position beats a slightly higher score in the wrong position
+            well_placed = (al.dest_start <= 2) if anchored_start else (al.dest_end >= len(text) - 2)
+            key = (well_placed, score)
+            if best_key is None or key > best_key:
+                best, best_key = (fld, score, al.dest_start, al.dest_end), key
         return best
 
     def _find_anchors(self, lines: list[OCRLine]) -> tuple[list[Anchor], list[OCRLine]]:
@@ -149,7 +151,7 @@ class Extractor:
                 if found_any:
                     continue
             # no usable colon: whole-box label? or "label value" without colon?
-            m = self._best_label(norm, anchored_start=True, relaxed=True) if self._in_label_zone(ln) else None
+            m = self._best_label(norm, anchored_start=True, relaxed=bool(self.W and ln.x2 >= 0.88 * self.W)) if self._in_label_zone(ln) else None
             if m:
                 fld, score, st, en = m
                 lab_len = en - st
@@ -255,10 +257,16 @@ class Extractor:
         return cands[0][2], -cands[0][1]
 
     # ---------- main ----------
-    def _blind_crop(self, image: np.ndarray, anchor: OCRLine, W: int, frac: float = 0.15) -> list[OCRLine]:
-        """Detector missed the value box: synthesise a box left of the label to run the digits pass on."""
-        x2 = anchor.x1 - 3
-        x1 = max(0, anchor.x1 - int(frac * W))
+    def _blind_crop(self, image: np.ndarray, anchor: OCRLine, W: int, frac: float = 0.15, ext: float = 1.0) -> list[OCRLine]:
+        """Detector missed (or swallowed) the value box: synthesise a box left of the label for the digits pass.
+        The label's own box frequently overlaps the value's last digits, so extend `ext` label-heights into it."""
+        label_x1 = anchor.x1
+        if anchor.parts:
+            arabic = [p for p in anchor.parts if has_arabic(p.text) and not re.fullmatch(r"[\s٠-٩0-9/.:-]+", p.text)]
+            if arabic:
+                label_x1 = min(p.x1 for p in arabic)
+        x2 = min(anchor.x2, label_x1 + int(ext * anchor.h))
+        x1 = max(0, label_x1 - int(frac * W))
         return [OCRLine(text="", bbox=(x1, anchor.y1, max(1, x2 - x1), anchor.h), confidence=0.0)]
 
     def extract(self, lines: list[OCRLine], image: np.ndarray | None, W: int, H: int) -> ExtractionResult:
@@ -300,9 +308,12 @@ class Extractor:
                     crops: list[list[OCRLine]] = []
                     if a.value_lines:
                         crops.append(a.value_lines)
-                    if not a.inline_value:
-                        crops.append(self._blind_crop(image, a.line, W))
-                        crops.append(self._blind_crop(image, a.line, W, frac=0.11))
+                    if not a.inline_value or len(re.sub(r"\D", "", a.inline_value.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")))) < 8:
+                        crops.append(self._blind_crop(image, a.line, W, ext=0.0))
+                        crops.append(self._blind_crop(image, a.line, W, ext=0.4))
+                        crops.append(self._blind_crop(image, a.line, W, frac=0.11, ext=0.2))
+                    # a crop that includes label strokes can yield a plausible-but-wrong 8-digit date:
+                    # only a separator-bearing ("direct") parse may stop the search; otherwise keep the best multiplier
                     for boxes in crops:
                         second = self._digits_pass(image, boxes, want_len=8)
                         if not second:
@@ -351,10 +362,31 @@ class Extractor:
                     res.warnings.append("employer_id found by pattern, not by label")
 
         self._infer_by_row_order(res, anchors, free, W)
+        self._infer_nationality(res, anchors, free, W)
         fa, fe = self._names(anchors, free, W, H)
         if fa: res.set(fa)
         if fe: res.set(fe)
         return res
+
+    # ---------- nationality by vocabulary ----------
+    def _infer_nationality(self, res: ExtractionResult, anchors: list[Anchor], free: list[OCRLine], W: int) -> None:
+        """Label garbled/missing: the nationality value is a country name from a closed list, printed in the
+        right-hand value column (x >= 0.7 W). Birth place also holds a country but sits in the middle column."""
+        if res.value("nationality"):
+            return
+        best = None
+        for l in free:
+            if not has_arabic(l.text) or l.x1 < 0.7 * W:
+                continue
+            code, mult, note = resolve_nationality(clean_text(l.text), self.rules)
+            if code and mult >= 0.85 and (best is None or mult > best[1]):
+                best = (l, mult, code, note)
+        if best:
+            l, mult, code, note = best
+            res.set(FieldValue(field="nationality", raw_text=clean_text(l.text), normalized=code, confidence=round(max(l.confidence * mult, 0.8 if note == "exact" else 0.0), 3),
+                               bbox=l.bbox, source="ocr", note=f"vocab_inference:{note}"))
+            free.remove(l)
+            res.warnings.append("nationality: label unreadable; value matched from country list")
 
     # ---------- row-order inference ----------
     SINGLE_COLUMN_ORDER = ["nationality", "occupation", "employer_id", "issue_place", "work_place", "employer_name"]
