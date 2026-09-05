@@ -3,3 +3,4 @@ code,occupation_ar,occupation_en,category,eligible,reason,aliases,updated_by,upd
 ,حلاق,Barber,Individual/Excluded,No,Excluded occupation,مزين|حلاق رجالي|مزين رجالي,admin,2026-09-04
 ,راعي مواشي,Livestock Herder,Individual/Excluded,No,Excluded occupation,راعي غنم|راعي إبل|راعي ابل|راعي|راعي اغنام,admin,2026-09-04
 ,سائق خاص,Private Driver,Individual/Excluded,No,Excluded occupation,سائق منزل|سائق عائلة|سائق عائله|سائق خاص للعائلة,admin,2026-09-04
+,عامل منزلي,Domestic Worker,Individual/Excluded,No,Excluded occupation,عاملة منزلية|عامل منزل|خادم|خادمة|عاملة منزل,user,2026-09-05
