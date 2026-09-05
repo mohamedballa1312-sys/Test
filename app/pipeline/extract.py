@@ -483,9 +483,9 @@ class Extractor:
         cues = self._doc_type_cues(lines)
         iq = res.value("iqama_no") or ""
         if cues >= 1 or (iq.startswith("1") and "هويه مقيم" not in texts):
-            if not res.value("nationality"):
-                res.set(FieldValue(field="nationality", raw_text=None, normalized=self.rules.config.national_id.nationality_code,
-                                   confidence=1.0, source="derived", note="national_id"))
+            # user rule: a national ID holder is always Saudi, whatever else was read on the card
+            res.set(FieldValue(field="nationality", raw_text=None, normalized=self.rules.config.national_id.nationality_code,
+                               confidence=1.0, source="derived", note="national_id"))
             return "NATIONAL_ID"
         return "IQAMA"
 
