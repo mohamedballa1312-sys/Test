@@ -58,6 +58,9 @@ def decide(x: ExtractionResult, rules: RulesSnapshot, clock: Clock | None = None
         elif fv.source == "ocr" and fv.confidence < cfg.ocr.min_field_confidence:
             triggers.append(f"LOW_CONFIDENCE:{f} ({fv.confidence:.2f})")
 
+    if x.layout == "old" and cfg.layout.old_layout_action == "REVIEW":
+        triggers.append(f"OLD_LAYOUT: {cfg.layout.old_layout_note}")
+
     # ---- G1: hard fails (all reasons collected, in check order) ----
     hard = [c for c in checks if c.outcome == "FAIL" and c.confidence >= cfg.decision.hard_fail_threshold(c.check)]
     soft_fail = [c for c in checks if c.outcome == "FAIL" and c.confidence < cfg.decision.hard_fail_threshold(c.check)]

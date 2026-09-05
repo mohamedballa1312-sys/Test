@@ -354,8 +354,11 @@ class Extractor:
                     n, cf, l = max(c, key=lambda t: t[1])
                     res.set(FieldValue(field="iqama_no", raw_text=l.text, normalized=n, confidence=round(max(cf * 0.95, 0.8 if luhn_ok(n) else 0.0), 3), bbox=l.bbox, source="pattern", note="pattern_fallback"))
                     res.warnings.append("iqama_no found by pattern, not by label")
-            if res.value("employer_id") is None:
-                c = [f for f in found if f[0][0] in "127" and f[0] != res.value("iqama_no")]
+            if res.value("employer_id") is None and self._preliminary_layout(lines) != "old":
+                iq = res.value("iqama_no") or ""
+                c = [f for f in found if f[0][0] in "127" and luhn_ok(f[0])
+                     and re.search(r"(?<!\d)\d{10}(?!\d)", f[2].text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")))   # one contiguous run
+                     and sum(a != b for a, b in zip(f[0], iq)) > 2]                                                        # not the Iqama misread
                 if c:
                     n, cf, l = max(c, key=lambda t: t[1])
                     res.set(FieldValue(field="employer_id", raw_text=l.text, normalized=n, confidence=round(max(cf * 0.95, 0.78 if luhn_ok(n) else 0.0), 3), bbox=l.bbox, source="pattern", note="pattern_fallback"))
@@ -366,7 +369,49 @@ class Extractor:
         fa, fe = self._names(anchors, free, W, H)
         if fa: res.set(fa)
         if fe: res.set(fe)
+        res.layout = self._detect_layout(res, anchors, lines)
         return res
+
+    # ---------- layout ----------
+    _OLD_HEADER = ("kingdom of saudi arabia", "ministry of interior", "resident identity")
+
+    def _old_header_score(self, lines: list[OCRLine]) -> int:
+        """The old green card carries an English header; the current one is Arabic-only. OCR garbles it, so fuzzy."""
+        hits = 0
+        for l in lines:
+            if has_latin(l.text) and self.H and l.y1 < 0.25 * self.H:
+                t = (l.text or "").lower()
+                if any(fuzz.partial_ratio(h, t) >= 80 for h in self._OLD_HEADER):
+                    hits += 1
+        return hits
+
+    def _preliminary_layout(self, lines: list[OCRLine]) -> str:
+        return "old" if self._old_header_score(lines) >= 2 else "unknown"
+
+    def _detect_layout(self, res: ExtractionResult, anchors: list[Anchor], lines: list[OCRLine]) -> str:
+        """Old green 'Resident Identity' layout vs the current 'هوية مقيم' layout, from independent cues."""
+        old = 0; new = 0
+        texts = " ".join(normalize_arabic(l.text) or "" for l in lines)
+        old += min(3, self._old_header_score(lines))
+        if (res.fields.get("expiry_date") or FieldValue(field="x")).note and "hijri" in (res.fields["expiry_date"].note or ""):
+            old += 2
+        bare = {"الرقم", "الانتهاء", "الميلاد", "صاحب العمل", "الاصدار"}
+        for a in anchors:
+            m = self._best_label(normalize_arabic(a.line.text) or "", anchored_start=True, relaxed=True)
+            # which variant matched? approximate: a short label text (<= 9 chars) for these fields signals the old layout
+            if a.field in ("iqama_no", "expiry_date", "birth_date", "employer_name", "issue_place") and len((normalize_arabic(a.line.text) or "").split(":")[0].strip()) <= 9:
+                old += 1
+        if res.value("employer_id"):
+            new += 2
+        if any(a.field == "employer_id" for a in anchors):
+            new += 1
+        if "هويه مقيم" in texts and "رقم النسخه" in texts:
+            new += 1
+        if old >= 3 and old > new:
+            return "old"
+        if new >= 2 and new >= old:
+            return "new"
+        return "unknown"
 
     # ---------- nationality by vocabulary ----------
     def _infer_nationality(self, res: ExtractionResult, anchors: list[Anchor], free: list[OCRLine], W: int) -> None:

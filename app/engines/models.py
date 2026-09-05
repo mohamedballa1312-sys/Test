@@ -38,6 +38,7 @@ class ExtractionResult(BaseModel):
     raw_lines: list[dict[str, Any]] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     anchors_found: int = 0
+    layout: Literal["new", "old", "unknown"] = "unknown"   # "old" = green "Resident Identity" card (Hijri expiry, no employer ID)
 
     def value(self, name: str) -> str | None:
         f = self.fields.get(name)

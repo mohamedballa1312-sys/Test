@@ -94,6 +94,11 @@ def test_old_layout_hijri_and_bare_labels(rules):
     assert "بيت" in x.value("employer_name")
     assert x.value("employer_id") is None                     # not printed on this layout
     assert x.value("name_en") == "OMAR ALI HASSAN MAHMOUD"
+    assert x.layout == "old"
+
+
+def test_new_layout_detected(rules):
+    assert Extractor(rules, None).extract(card_lines(), None, W, H).layout == "new"
 
 
 def test_bare_employer_label_does_not_steal_new_layout(rules):

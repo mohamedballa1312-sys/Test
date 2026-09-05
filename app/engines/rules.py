@@ -22,6 +22,12 @@ class ImageRules(BaseModel):
     upscale_below_px: int = 1200
 
 
+class LayoutRules(BaseModel):
+    # old green "Resident Identity" card: request the current Absher printout instead of deciding on it
+    old_layout_action: Literal["REVIEW", "IGNORE"] = "REVIEW"
+    old_layout_note: str = "OLD CARD LAYOUT - please provide the Absher copy / برجاء توفير نسخة أبشر"
+
+
 class OCRExternal(BaseModel):
     enabled: bool = False
     acknowledged_by: str | None = None
@@ -95,6 +101,7 @@ class RetentionRules(BaseModel):
 class RulesConfig(BaseModel):
     version_note: str = ""
     image: ImageRules = Field(default_factory=ImageRules)
+    layout: LayoutRules = Field(default_factory=LayoutRules)
     ocr: OCRRules = Field(default_factory=OCRRules)
     checks: ChecksRules = Field(default_factory=ChecksRules)
     nationality: NationalityRules = Field(default_factory=NationalityRules)

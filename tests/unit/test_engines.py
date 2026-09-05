@@ -144,3 +144,12 @@ def test_individual_with_eligible_occupation_goes_to_review(rules, make_x, clock
 def test_seeded_occupations_are_eligible(rules, make_x, clock):
     d = decide(make_x(**{**S2, "expiry_date": "2027-01-01"}), rules, clock)   # عامل تحميل وتنزيل now listed
     assert d.status == "MANUAL_REVIEW" and d.recommendation == "RECOMMEND_APPROVE"
+
+
+def test_old_layout_requests_absher_copy(rules, make_x, clock):
+    x = make_x(iqama_no="2401246992", expiry_date="2027-01-01", nationality="SD", occupation="نجار", employer_name="مؤسسة الأمل")
+    x.layout = "old"
+    d = decide(x, rules, clock)
+    assert d.status == "MANUAL_REVIEW" and any("نسخة أبشر" in t for t in d.review_triggers)
+    x.layout = "new"
+    assert not any("OLD_LAYOUT" in t for t in decide(x, rules, clock).review_triggers)

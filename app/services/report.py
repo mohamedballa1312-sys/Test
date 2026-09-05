@@ -27,7 +27,7 @@ COLUMNS = [
     ("Occupation Status", "occupation_status"), ("Employer Status", "employer_status"), ("Final Decision", "final_decision"),
     ("Rejection Reasons", "rejection_reasons"), ("Review Triggers", "review_triggers"), ("OCR Confidence (min)", "conf_min"),
     ("OCR Confidence (avg)", "conf_avg"), ("Image Quality", "quality"), ("Reviewed By", "reviewed_by"),
-    ("Reviewed At", "reviewed_at"), ("Rules Version", "rules_version"),
+    ("Reviewed At", "reviewed_at"), ("Card Layout", "layout"), ("Note", "note"), ("Rules Version", "rules_version"),
 ]
 FILL = {"APPROVED": "C6EFCE", "REJECTED": "FFC7CE", "MANUAL_REVIEW": "FFEB9C"}
 DISCLAIMER = ("This screening is based on the printed card image only, not on official government systems. "
@@ -77,6 +77,8 @@ class ReportService:
                     "reviewed_by": review.reviewer if review else None,
                     "reviewed_at": review.submitted_at.isoformat() if review and review.submitted_at else None,
                     "rules_version": (dec or {}).get("rules_version"),
+                    "layout": x.layout,
+                    "note": next((t.split(": ", 1)[1] for t in (dec or {}).get("review_triggers", []) if t.startswith("OLD_LAYOUT")), None),
                     "error": d.error_msg,
                 })
         return out
