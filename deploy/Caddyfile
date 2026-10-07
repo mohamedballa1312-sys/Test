@@ -1,0 +1,23 @@
+# SITE_ADDRESS = your domain (automatic Let's Encrypt HTTPS) or ":80" for plain HTTP on the server IP (testing only).
+{$SITE_ADDRESS} {
+	encode gzip
+	# the whole UI is behind HTTP basic auth (Streamlit has no login of its own)
+	basic_auth {
+		{$UI_USER} {$UI_PASSWORD_HASH}
+	}
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+	handle /docs* {
+		reverse_proxy api:8000
+	}
+	handle /openapi.json {
+		reverse_proxy api:8000
+	}
+	handle /health {
+		reverse_proxy api:8000
+	}
+	handle {
+		reverse_proxy ui:8501
+	}
+}
