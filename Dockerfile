@@ -1,12 +1,13 @@
-FROM python:3.11.11-slim-bookworm
+FROM python:3.11.17-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 DEBIAN_FRONTEND=noninteractive
 # libgl/glib: OpenCV · libreoffice-writer: permit request PDF · fonts: Arabic rendering in PDF
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Apply Debian security updates at build time so the image scan (Trivy, CI) stays clean between base-image bumps
+RUN apt-get update && apt-get upgrade -y --no-install-recommends && apt-get install -y --no-install-recommends \
       libgl1 libglib2.0-0 curl libreoffice-writer fonts-dejavu fonts-noto-core \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv
 COPY pyproject.toml README.md requirements.lock ./
-RUN mkdir -p app && pip install -r requirements.lock && pip install --no-deps -e .
+RUN pip install --upgrade "pip>=25" "wheel>=0.46.2" "setuptools>=80" && mkdir -p app && pip install -r requirements.lock && pip install --no-deps -e .
 COPY app ./app
 COPY config ./config
 COPY ui ./ui
