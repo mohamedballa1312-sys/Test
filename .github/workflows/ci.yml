@@ -16,7 +16,7 @@ jobs:
       - name: Lint
         run: ruff check app tests ui
       - name: Dependency audit
-        run: pip-audit --strict
+        run: pip-audit --strict --skip-editable
       - name: Unit tests
         env: { IQAMA_API_KEY: ci-test-key-0123456789, IQAMA_PURGE_INTERVAL_HOURS: "0" }
         run: pytest tests/unit -q -p no:warnings
