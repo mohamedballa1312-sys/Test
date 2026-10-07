@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # One-shot setup on a fresh Ubuntu 22.04/24.04 VM (4 vCPU / 8 GB RAM recommended).
-#   curl -fsSL https://raw.githubusercontent.com/mohamedballa1312-sys/Test/claude/github-connection-goihxv/deploy/setup-server.sh | sudo bash -s -- [DOMAIN]
+#   curl -fsSL https://raw.githubusercontent.com/mohamedballa1312-sys/Test/main/deploy/setup-server.sh | sudo bash -s -- [DOMAIN]
 # DOMAIN is optional: with it you get HTTPS (point the DNS A record to this server first); without it, HTTP on the IP.
 set -euo pipefail
 DOMAIN="${1:-}"
 REPO="https://github.com/mohamedballa1312-sys/Test.git"
-BRANCH="claude/github-connection-goihxv"
+BRANCH="main"
 APP_DIR="/opt/iqama-screener"
 
 echo "==> Installing Docker"

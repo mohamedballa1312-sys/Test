@@ -35,7 +35,7 @@ ssh ubuntu@<IP>
 ```
 ثم شغّل (ضع النطاق إن وُجد، أو اتركه فارغاً):
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mohamedballa1312-sys/Test/claude/github-connection-goihxv/deploy/setup-server.sh | sudo bash -s -- iqama.company.com
+curl -fsSL https://raw.githubusercontent.com/mohamedballa1312-sys/Test/main/deploy/setup-server.sh | sudo bash -s -- iqama.company.com
 ```
 
 السكربت يقوم بـ: تثبيت Docker · ضبط الجدار الناري · جلب الكود · **توليد المفاتيح السرية وكلمة مرور الدخول** · بناء وتشغيل الخدمات · طباعة الرابط وبيانات الدخول في النهاية:
