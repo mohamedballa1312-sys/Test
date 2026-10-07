@@ -4,6 +4,11 @@ services:
   api:
     build: ..
     restart: unless-stopped
+    user: "10001:10001"
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
     environment:
       IQAMA_DATA_DIR: /srv/data
       IQAMA_OCR_PROVIDER: ${IQAMA_OCR_PROVIDER:-easyocr}
@@ -11,14 +16,20 @@ services:
       IQAMA_API_KEY: ${IQAMA_API_KEY}
       IQAMA_WORKERS: ${IQAMA_WORKERS:-2}
       IQAMA_LOG_LEVEL: INFO
+      IQAMA_PUBLIC_URL: ${IQAMA_PUBLIC_URL:-}
+      IQAMA_PURGE_INTERVAL_HOURS: ${IQAMA_PURGE_INTERVAL_HOURS:-24}
+      IQAMA_MAX_FILES_PER_UPLOAD: ${IQAMA_MAX_FILES_PER_UPLOAD:-200}
     volumes:
       - ../data:/srv/data
       - ../config:/srv/config
-      - ocr-models:/root/.EasyOCR
+      - ocr-models:/home/app/.EasyOCR
     expose: ["8000"]
   ui:
     build: ..
     restart: unless-stopped
+    user: "10001:10001"
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
     command: ["streamlit", "run", "ui/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0",
               "--server.headless=true", "--browser.gatherUsageStats=false", "--server.maxUploadSize=200"]
     environment:
@@ -27,7 +38,10 @@ services:
     expose: ["8501"]
     depends_on: [api]
   caddy:
-    image: caddy:2
+    # caddy with the rate-limit plugin (github.com/mholt/caddy-ratelimit) built in
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     environment:

@@ -9,10 +9,10 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 
 from app.api import schemas
-from app.api.deps import actor, batch_service, clock, permit_service, report_service, require_api_key, review_service, rules_repo
+from app.api.deps import actor, batch_service, permit_service, report_service, require_api_key, review_service, rules_repo
 from app.audit.log import record
 from app.core.security import mask_id
-from app.db.models import AuditLog, Batch, DecisionRow, Document
+from app.db.models import AuditLog, Batch, Document
 from app.db.session import session_scope
 from app.engines.rules import FILES, RulesLoadError
 from app.services import retention
@@ -76,6 +76,8 @@ async def upload(batch_id: int, files: list[UploadFile] = File(...), who: str = 
         return batch_service().add_files(batch_id, payload, who)
     except KeyError as e:
         raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(413, str(e))
 
 
 @router.post("/batches/{batch_id}/process", status_code=202)
@@ -102,17 +104,22 @@ def update_project(batch_id: int, body: schemas.BatchProjectUpdate, who: str = D
 
 
 @router.get("/batches/{batch_id}/permit")
-def permit(batch_id: int, format: str = Query("docx", pattern="^(docx|pdf)$"), who: str = Depends(actor)):
+def permit(batch_id: int, format: str = Query("docx", pattern="^(docx|pdf)$"), recipient: str | None = Query(None, max_length=200),
+           password: str | None = Query(None, min_length=10, max_length=64), who: str = Depends(actor)):
+    """P0-11: the permit file is delivered as an AES-256 encrypted ZIP. The one-time password comes back in the
+    X-Permit-Password header; send it to the recipient through a different channel than the file."""
     try:
-        data, mime, warnings = permit_service().export(batch_id, format, who)
+        data, mime, warnings, pw = permit_service().export(batch_id, format, who, recipient=recipient, password=password)
     except KeyError as e:
         raise HTTPException(404, str(e))
     except PermitTemplateError as e:
         raise HTTPException(409, str(e))
-    ext = "pdf" if mime == "application/pdf" else "docx"
+    ext = {"application/pdf": "pdf", "application/zip": "zip"}.get(mime, "docx")
     headers = {"Content-Disposition": f'attachment; filename="permit_request_{batch_id}.{ext}"'}
     if warnings:
         headers["X-Permit-Warning"] = "; ".join(warnings)
+    if pw and not password:
+        headers["X-Permit-Password"] = pw
     return Response(data, media_type=mime, headers=headers)
 
 

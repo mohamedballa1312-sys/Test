@@ -23,7 +23,7 @@ class PaddleProvider:
         if not res:
             return out
         r = res[0]
-        for text, score, poly in zip(r["rec_texts"], r["rec_scores"], r["rec_polys"]):
+        for text, score, poly in zip(r["rec_texts"], r["rec_scores"], r["rec_polys"], strict=False):
             xs = [p[0] for p in poly]; ys = [p[1] for p in poly]
             x, y = int(min(xs)), int(min(ys))
             out.append(OCRLine(text=str(text), bbox=(x, y, int(max(xs) - x), int(max(ys) - y)), confidence=float(score)))

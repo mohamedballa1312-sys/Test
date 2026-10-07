@@ -1,9 +1,33 @@
 # SITE_ADDRESS = your domain (automatic Let's Encrypt HTTPS) or ":80" for plain HTTP on the server IP (testing only).
 {$SITE_ADDRESS} {
 	encode gzip
+	# P0-08: request body cap (card images are < 25 MB each; 200 files max per upload)
+	request_body {
+		max_size 300MB
+	}
 	# the whole UI is behind HTTP basic auth (Streamlit has no login of its own)
 	basic_auth {
 		{$UI_USER} {$UI_PASSWORD_HASH}
+	}
+	# P0-08: per-client rate limits - 120 API requests/min, 10 uploads/min
+	rate_limit {
+		zone api_general {
+			match {
+				path /api/*
+			}
+			key {remote_host}
+			events 120
+			window 1m
+		}
+		zone api_upload {
+			match {
+				method POST
+				path /api/v1/batches/*/documents
+			}
+			key {remote_host}
+			events 10
+			window 1m
+		}
 	}
 	handle /api/* {
 		reverse_proxy api:8000

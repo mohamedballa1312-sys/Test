@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import get_encryptor
 from app.db.models import DecisionRow, Document, ExtractedField
-from app.engines.models import CheckResult, Decision, ExtractionResult, FieldValue
+from app.engines.models import Decision, ExtractionResult, FieldValue
 
 
 def save_extraction(s: Session, doc: Document, x: ExtractionResult) -> None:

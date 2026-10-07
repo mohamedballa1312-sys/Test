@@ -1,0 +1,5 @@
+line-length = 140
+target-version = "py311"
+[lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501", "B008", "B904", "UP007", "E712", "E701", "E702", "E741"]  # one-liners and short names are house style

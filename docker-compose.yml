@@ -11,7 +11,7 @@ services:
     volumes:
       - ./data:/srv/data
       - ./config:/srv/config
-      - ocr-models:/root/.EasyOCR
+      - ocr-models:/home/app/.EasyOCR
     ports: ["8000:8000"]
   ui:
     build: .

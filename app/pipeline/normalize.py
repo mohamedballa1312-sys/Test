@@ -4,7 +4,14 @@ from __future__ import annotations
 import re
 from datetime import date
 
-from app.core.text import hijri_to_gregorian, is_hijri_year, luhn_ok, normalize_arabic, normalize_digits, normalize_numeric_field, parse_date
+from app.core.text import (
+    hijri_to_gregorian,
+    is_hijri_year,
+    luhn_ok,
+    normalize_arabic,
+    normalize_digits,
+    parse_date,
+)
 from app.engines.rules import RulesSnapshot
 
 _CHUNK = re.compile(r"[0-9]+")

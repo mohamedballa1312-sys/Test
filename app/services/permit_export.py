@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
@@ -39,7 +39,9 @@ def save_template(data: bytes, actor: str) -> dict:
 
 def _merge_runs(data: bytes) -> bytes:
     """Coalesce adjacent identically-formatted runs in word/document.xml (Word splits placeholders into fragments)."""
-    import io, re, zipfile
+    import io
+    import re
+    import zipfile
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         xml = z.read("word/document.xml").decode("utf-8")
         others = {n: z.read(n) for n in z.namelist() if n != "word/document.xml"}
@@ -55,7 +57,7 @@ def _merge_runs(data: bytes) -> bytes:
                 j += 1; text += parts[j].group(2)
             out.append((parts[i].start(), parts[j].end(), f'<w:r>{rpr}<w:t xml:space="preserve">{text}</w:t></w:r>'))
             i = j + 1
-        res = p; 
+        res = p
         for a, b, rep in reversed(out):
             res = res[:a] + rep + res[b:]
         return res
@@ -101,7 +103,22 @@ class PermitExportService:
                               workers=workers, stamp_approved_rows=cfg.stamp_approved_rows, stamp_images=cfg.stamp_images)
             return data, ids
 
-    def export(self, batch_id: int, fmt: str, actor: str) -> tuple[bytes, str, list[str]]:
+    @staticmethod
+    def _protect(payload: bytes, filename: str, password: str) -> bytes:
+        """AES-256 encrypted ZIP (WinZip AE-2, opens with 7-Zip, WinRAR, macOS Keka; not with Windows Explorer)."""
+        import io
+
+        import pyzipper
+        buf = io.BytesIO()
+        with pyzipper.AESZipFile(buf, "w", compression=pyzipper.ZIP_DEFLATED, encryption=pyzipper.WZ_AES) as z:
+            z.setpassword(password.encode("utf-8"))
+            z.writestr(filename, payload)
+        return buf.getvalue()
+
+    def export(self, batch_id: int, fmt: str, actor: str, recipient: str | None = None,
+               password: str | None = None) -> tuple[bytes, str, list[str], str | None]:
+        """Returns (bytes, mime, warnings, password). With permit.protect_export the bytes are an encrypted ZIP
+        and the password is generated (or the caller's) and returned ONCE; it is never stored, only its use audited."""
         tp = template_path()
         if not tp.exists():
             raise PermitTemplateError("no permit template uploaded yet (PUT /api/v1/templates/permit)")
@@ -116,14 +133,25 @@ class PermitExportService:
                 out, mime = pdf, "application/pdf"
             else:
                 warnings.append("PDF conversion unavailable (LibreOffice not found or failed); returned .docx instead")
+        pw: str | None = None
+        cfg_p = self.rules.active.config.permit
+        if cfg_p.protect_export:
+            import secrets
+            import string
+            alphabet = string.ascii_letters + string.digits
+            pw = password or "".join(secrets.choice(alphabet) for _ in range(cfg_p.export_password_length))
+            inner = f"permit_request_{batch_id}." + ("pdf" if mime == "application/pdf" else "docx")
+            out, mime = self._protect(out, inner, pw), "application/zip"
         with session_scope() as s:
             b = s.get(Batch, batch_id)
-            b.permit_exported_at = datetime.now(timezone.utc)
-            record(s, actor, "PERMIT_EXPORTED", "batch", batch_id, {"format": fmt, "workers": len(data.workers), "warnings": warnings})
+            b.permit_exported_at = datetime.now(UTC)
+            record(s, actor, "PERMIT_EXPORTED", "batch", batch_id,
+                   {"format": fmt, "workers": len(data.workers), "warnings": warnings, "recipient": recipient,
+                    "protected": bool(pw), "password_supplied_by_caller": bool(password)})
             cfg = self.rules.active.config.retention
             if cfg.delete_images_after_final_decision and cfg.delete_images_after == "PERMIT_EXPORT":
                 for d in b.documents:
                     dec = current_decision(d)
                     if dec is not None and dec.is_final:
                         delete_image(s, d, actor)
-        return out, mime, warnings
+        return out, mime, warnings, pw

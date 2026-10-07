@@ -12,7 +12,7 @@ class OCRLine:
     text: str
     bbox: tuple[int, int, int, int]  # x, y, w, h
     confidence: float
-    parts: list["OCRLine"] | None = None  # set when this line was merged from adjacent boxes
+    parts: list[OCRLine] | None = None  # set when this line was merged from adjacent boxes
 
     @property
     def x1(self) -> int: return self.bbox[0]

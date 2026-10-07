@@ -61,7 +61,7 @@ class Encryptor:
         self._aead = AESGCM(key)
 
     @classmethod
-    def from_settings(cls, enc_key_b64: str | None, data_dir: Path) -> "Encryptor":
+    def from_settings(cls, enc_key_b64: str | None, data_dir: Path) -> Encryptor:
         return cls(_load_or_create_key(enc_key_b64, data_dir))
 
     def encrypt(self, plaintext: str | None) -> str | None:

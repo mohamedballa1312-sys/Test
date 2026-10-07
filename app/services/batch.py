@@ -4,7 +4,7 @@ from __future__ import annotations
 import threading
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import cv2
@@ -51,6 +51,8 @@ class BatchService:
 
     def add_files(self, batch_id: int, files: list[tuple[str, bytes]], actor: str) -> dict:
         accepted: list[int] = []; rejected: list[dict] = []
+        if len(files) > self.settings.max_files_per_upload:
+            raise ValueError(f"too many files in one upload (> {self.settings.max_files_per_upload})")
         enc = get_encryptor()
         with session_scope() as s:
             b = s.get(Batch, batch_id)
@@ -75,6 +77,21 @@ class BatchService:
                     record(s, actor, "DOCUMENT_UPLOADED", "document", d.id, {"filename": filename, "page": p.page_no, "duplicate_of": dup})
             b.total = len(b.documents)
         return {"accepted": accepted, "rejected": rejected}
+
+    # ---------- recovery ----------
+    def sweep_stale(self, actor: str = "startup") -> int:
+        """P0-09: after a crash/restart, documents stuck in PROCESSING go back to QUEUED and their
+        batches are re-run. Returns the number of documents re-queued."""
+        with session_scope() as s:
+            stale = s.query(Document).filter(Document.status == "PROCESSING").all()
+            batch_ids = sorted({d.batch_id for d in stale})
+            for d in stale:
+                d.status = "QUEUED"
+                record(s, actor, "DOCUMENT_REQUEUED", "document", d.id, {"reason": "stale PROCESSING on startup"})
+            n = len(stale)
+        for bid in batch_ids:
+            self.start_processing(bid, actor)
+        return n
 
     # ---------- processing ----------
     def start_processing(self, batch_id: int, actor: str) -> None:
@@ -134,7 +151,7 @@ class BatchService:
                 Path(doc.image_path).write_bytes(get_encryptor().encrypt_bytes(buf.tobytes()))
                 save_decision(s, doc, d)
                 doc.status = "DONE"; doc.error_msg = None
-                doc.processed_at = datetime.now(timezone.utc)
+                doc.processed_at = datetime.now(UTC)
                 record(s, actor, "DOCUMENT_PROCESSED", "document", doc_id,
                        {"status": d.status, "quality": x.quality_score, "reasons": d.reasons, "triggers": d.review_triggers})
             log.info("processed", doc_id=doc_id, status=d.status)
@@ -165,5 +182,5 @@ def delete_image(s, doc: Document, actor: str) -> None:
         Path(doc.image_path).unlink()
     if doc.image_path:
         doc.image_path = None
-        doc.image_deleted_at = datetime.now(timezone.utc)
+        doc.image_deleted_at = datetime.now(UTC)
         record(s, actor, "IMAGE_DELETED", "document", doc.id, {})

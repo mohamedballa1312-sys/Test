@@ -68,3 +68,5 @@ permit:
   include_statuses: [APPROVED]
   stamp_approved_rows: true
   stamp_images: true
+  protect_export: true                 # P0-11: Word/PDF permit delivered inside an AES-256 encrypted ZIP
+  export_password_length: 14

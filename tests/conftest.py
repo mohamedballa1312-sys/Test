@@ -15,6 +15,8 @@ def tmp_data_dir():
     os.environ["IQAMA_DATA_DIR"] = str(d)
     os.environ["IQAMA_OCR_PROVIDER"] = os.environ.get("IQAMA_TEST_OCR_PROVIDER", "mock")
     os.environ["IQAMA_CONFIG_DIR"] = str(ROOT / "config")
+    os.environ["IQAMA_API_KEY"] = "test-api-key-0123456789"
+    os.environ["IQAMA_PURGE_INTERVAL_HOURS"] = "0"
     yield d
     shutil.rmtree(d, ignore_errors=True)
 
@@ -46,11 +48,12 @@ def make_x():
 @pytest.fixture(scope="session")
 def api(tmp_data_dir):
     from fastapi.testclient import TestClient
+
     from app.api.deps import reset_deps
     from app.core.config import reset_settings
     from app.core.security import reset_encryptor
     from app.db.session import reset_db
     reset_settings(); reset_encryptor(); reset_db(); reset_deps()
     from app.main import create_app
-    with TestClient(create_app()) as c:
+    with TestClient(create_app(), headers={"X-API-Key": "test-api-key-0123456789"}) as c:
         yield c

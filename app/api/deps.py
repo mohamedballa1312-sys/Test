@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Header, HTTPException, Request
 
 from app.core.clock import Clock
 from app.core.config import get_settings
@@ -45,8 +45,12 @@ def permit_service() -> PermitExportService:
 
 
 def require_api_key(x_api_key: str | None = Header(default=None)) -> None:
-    expected = get_settings().api_key
-    if expected and x_api_key != expected:
+    """P0-01: the key is mandatory; only IQAMA_ALLOW_INSECURE=1 (local development) relaxes it."""
+    s = get_settings()
+    if s.allow_insecure and not s.api_key:
+        return
+    import hmac
+    if not x_api_key or not s.api_key or not hmac.compare_digest(x_api_key, s.api_key):
         raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
 
 

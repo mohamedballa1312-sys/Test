@@ -94,8 +94,9 @@ def test_full_flow(api, restore_occupations):
         api.patch(f"/api/v1/documents/{s2['id']}/company", json={"company_name": "قدرة العربية"})
         p = api.get(f"/api/v1/batches/{bid}/permit", params={"format": "docx"})
         assert p.status_code == 200 and p.content[:2] == b"PK", p.text
-        from docx import Document
         import io as _io
+
+        from docx import Document
         d = Document(_io.BytesIO(p.content))
         team = d.tables[1]
         assert team.rows[1].cells[4].text == "ابوبكر عباس الزبير عباس" and team.rows[1].cells[2].text == "قدرة العربية"

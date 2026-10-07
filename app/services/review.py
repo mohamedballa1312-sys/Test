@@ -1,22 +1,21 @@
 """Manual review: queue, field correction (re-runs engines only), final sign-off."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
 from app.audit.log import record
 from app.core.clock import Clock
+from app.core.text import parse_date
 from app.db.models import DecisionRow, Document, ExtractedField, Review
 from app.db.session import session_scope
 from app.engines.decision import decide
-from app.engines.models import FieldValue
 from app.engines.rules import RulesRepository
 from app.pipeline.normalize import resolve_nationality
 from app.pipeline.validate import validate
 from app.services.batch import delete_image
 from app.services.store import current_decision, decision_to_dict, load_extraction, save_decision
-from app.core.text import parse_date
 
 
 class ReviewService:
@@ -52,7 +51,7 @@ class ReviewService:
             doc = s.get(Document, doc_id)
             if doc is None:
                 raise KeyError(f"document {doc_id} not found")
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             applied = {}
             for name, value in corrections.items():
                 normalized = _normalize_manual(name, value, rules)
@@ -90,7 +89,7 @@ class ReviewService:
             elif not d.reasons:
                 d.reasons = [f"Rejected by reviewer{': ' + note if note else ''}"]
             row = save_decision(s, doc, d, is_final=True)
-            s.add(Review(document_id=doc_id, reviewer=actor, submitted_at=datetime.now(timezone.utc), final_status=final_status,
+            s.add(Review(document_id=doc_id, reviewer=actor, submitted_at=datetime.now(UTC), final_status=final_status,
                          note=note, previous_decision_id=prev.id if prev else None, new_decision_id=row.id))
             record(s, actor, "REVIEW_SUBMITTED", "document", doc_id, {"final_status": final_status, "note": note})
             if rules.config.retention.delete_images_after_final_decision and rules.config.retention.delete_images_after == "FINAL_DECISION":

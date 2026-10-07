@@ -5,7 +5,7 @@ import csv
 import hashlib
 import io
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
@@ -121,6 +121,8 @@ class PermitRules(BaseModel):
     include_statuses: list[str] = Field(default_factory=lambda: ["APPROVED"])
     stamp_approved_rows: bool = True
     stamp_images: bool = True
+    protect_export: bool = True            # P0-11: permit file is delivered as an AES-256 encrypted ZIP
+    export_password_length: int = 14
 
 
 class RulesConfig(BaseModel):
@@ -234,7 +236,7 @@ class RulesSnapshot:
         for name in FILES:
             h.update(name.encode()); h.update(files[name].encode("utf-8"))
         self.version = h.hexdigest()[:12]
-        self.loaded_at = datetime.now(timezone.utc)
+        self.loaded_at = datetime.now(UTC)
         # indexes
         self._occ_exact: dict[str, OccupationRow] = {}
         for row in self.occupations:
@@ -333,7 +335,7 @@ class RulesRepository:
             "code": row.get("code", ""), "occupation_ar": row["occupation_ar"], "occupation_en": row.get("occupation_en", ""),
             "category": row.get("category", ""), "eligible": "Yes" if row.get("eligible") else "No",
             "reason": row.get("reason", ""), "aliases": "|".join(row.get("aliases", []) if isinstance(row.get("aliases"), list) else str(row.get("aliases", "")).split("|")),
-            "updated_by": actor, "updated_at": datetime.now(timezone.utc).date().isoformat(),
+            "updated_by": actor, "updated_at": datetime.now(UTC).date().isoformat(),
         }
         rows.append(new)
         buf = io.StringIO()

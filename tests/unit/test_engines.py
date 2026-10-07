@@ -3,13 +3,12 @@ from datetime import date, timedelta
 import pytest
 
 from app.core.clock import FixedClock
-from app.engines.models import FieldValue
 from app.engines.decision import decide
-from app.engines.employer import classify_employer, check_employer
+from app.engines.employer import check_employer, classify_employer
 from app.engines.expiry import check_expiry
+from app.engines.models import FieldValue
 from app.engines.nationality import check_nationality
 from app.engines.occupation import check_occupation, match_occupation
-
 
 S1 = dict(iqama_no="2401246992", expiry_date="2022-12-11", nationality="SD", occupation="سائق خاص", employer_id="1052885942", employer_name="محمد سعد فهد القحطاني")
 S2 = dict(iqama_no="2627946219", expiry_date="2026-12-30", nationality="SD", occupation="عامل تحميل وتنزيل", employer_id="7034514229", employer_name="مؤسسة عبيد محمد البيشي")

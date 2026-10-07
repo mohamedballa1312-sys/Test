@@ -1,7 +1,7 @@
 """Deletion (right to erasure) and time-based retention."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from app.audit.log import record
 from app.db.models import Batch, Document
@@ -35,7 +35,7 @@ def delete_batch(batch_id: int, actor: str) -> bool:
 
 def purge_expired(rules: RulesRepository, actor: str = "system") -> int:
     days = rules.active.config.retention.data_retention_days
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff = datetime.now(UTC) - timedelta(days=days)
     n = 0
     with session_scope() as s:
         for b in s.query(Batch).filter(Batch.created_at < cutoff).all():

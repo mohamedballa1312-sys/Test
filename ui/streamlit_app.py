@@ -18,7 +18,19 @@ st.markdown("""<style>
 .small {font-size: 0.85em; color: #666;}
 .badge {padding: 2px 8px; border-radius: 6px; font-weight: 600;}
 .APPROVED {background:#C6EFCE;color:#1e5b2e;} .REJECTED {background:#FFC7CE;color:#7a1c1c;} .MANUAL_REVIEW {background:#FFEB9C;color:#6b4d00;} .ERROR{background:#eee;color:#444;}
+/* P0-10: Arabic-first direction for data tables and captions; readable secondary text (WCAG 1.4.3) */
+[data-testid="stDataFrame"] {direction: rtl;}
+.stCaption, .small, [data-testid="stCaptionContainer"] {color: #4a4a4a !important;}
 </style>""", unsafe_allow_html=True)
+
+CONF_LABEL = {"high": "ثقة عالية / high", "mid": "ثقة متوسطة / medium", "low": "ثقة منخفضة / low"}
+
+
+def conf_badge(conf: float) -> str:
+    """P0-10 / WCAG 1.4.1: colour never carries meaning alone - the dot is always paired with a text label."""
+    level = "high" if conf >= 0.75 else ("mid" if conf >= 0.5 else "low")
+    dot = {"high": "🟢", "mid": "🟠", "low": "🔴"}[level]
+    return f"{dot} {CONF_LABEL[level]} ({conf:.2f})"
 
 
 def H() -> dict:
@@ -59,6 +71,16 @@ with st.sidebar:
 # ---------------- 1 upload ----------------
 if page.startswith("1"):
     st.header("Upload Iqamas")
+    with st.expander("إشعار الخصوصية — Privacy notice (PDPL)", expanded=False):
+        st.markdown("""<div class="rtl">
+<b>الغرض:</b> فحص أهلية حاملي الإقامات/الهويات لإصدار تصاريح العمل للمشروع المحدد فقط.<br>
+<b>الأساس النظامي:</b> تنفيذ التزام تعاقدي بين الشركة الطالبة وجهة إصدار التصريح.<br>
+<b>البيانات المعالجة:</b> صورة البطاقة، الاسم، رقم الهوية، الجنسية، تاريخ الانتهاء، المهنة، صاحب العمل.<br>
+<b>المعالجة:</b> محلياً على هذا الخادم فقط؛ لا تُرسل أي بيانات لجهة خارجية. البيانات الحساسة مشفّرة.<br>
+<b>الاحتفاظ:</b> تُحذف صور البطاقات بعد إصدار طلب التصريح؛ السجلات وفق جدول الاحتفاظ المعتمد.<br>
+<b>حقوق صاحب البيانات:</b> الاطلاع والتصحيح والحذف عبر مالك النظام المذكور في وثيقة RACI.<br>
+<b>بتحميل الصور تؤكد أن لديك أساساً نظامياً لمعالجتها.</b>
+</div>""", unsafe_allow_html=True)
     name = st.text_input("Batch name", value=f"batch-{time.strftime('%Y%m%d-%H%M')}")
     try:
         defaults = api("GET", "/api/v1/rules").json()["config"]["permit"]["default_requesting_companies"]
@@ -111,7 +133,7 @@ elif page.startswith("2"):
     batches = api("GET", "/api/v1/batches")
     batches = batches.json() if batches else []
     if not batches:
-        st.info("No batches yet."); st.stop()
+        st.info("لا توجد دفعات بعد — ابدأ من صفحة Upload & Process. / No batches yet: start on the Upload page."); st.stop()
     opts = {f"#{b['id']} {b['name']} ({b['status']}, {b['processed']}/{b['total']})": b["id"] for b in batches}
     default = next((k for k, v in opts.items() if v == st.session_state.get("dash_batch")), list(opts)[0])
     bid = opts[st.selectbox("Batch", list(opts), index=list(opts).index(default))]
@@ -122,7 +144,7 @@ elif page.startswith("2"):
              ("Individual Employer", "individual_employer", "trigger:Individual Employer"),
              ("Excluded Occupation", "excluded_occupation", "trigger:Excluded Occupation"), ("Errors", "errors", "ERROR")]
     cols = st.columns(len(tiles))
-    for col, (label, key, filt) in zip(cols, tiles):
+    for col, (label, key, filt) in zip(cols, tiles, strict=False):
         if col.button(f"{s.get(key, 0)}\n\n{label}", key=f"tile_{key}", use_container_width=True):
             st.session_state["filter"] = filt
     filt = st.session_state.get("filter")
@@ -160,20 +182,22 @@ elif page.startswith("2"):
         st.warning("No permit template uploaded yet — upload it on the Rules page.")
     else:
         st.caption(f"Approved workers only · requesting companies: {', '.join(b.get('requesting_companies', []))} · project: {b.get('project', {}).get('name') or '—'}")
+        recipient = st.text_input("Recipient (name or e-mail) — المستلم", key="permit_recipient")
         p1, p2 = st.columns(2)
-        if p1.button("Generate Word (.docx)"):
-            r = api("GET", f"/api/v1/batches/{bid}/permit", params={"format": "docx"})
-            if r: st.session_state["permit_docx"] = r.content
-        if p2.button("Generate PDF"):
-            r = api("GET", f"/api/v1/batches/{bid}/permit", params={"format": "pdf"})
+        def _fetch(fmt):
+            r = api("GET", f"/api/v1/batches/{bid}/permit", params={"format": fmt, "recipient": recipient or None})
             if r:
                 if r.headers.get("X-Permit-Warning"): st.warning(r.headers["X-Permit-Warning"])
-                st.session_state["permit_pdf"] = (r.content, r.headers.get("content-type", ""))
-        if st.session_state.get("permit_docx"):
-            p1.download_button("⬇️ permit_request.docx", st.session_state["permit_docx"], f"permit_request_{bid}.docx")
-        if st.session_state.get("permit_pdf"):
-            data, ct = st.session_state["permit_pdf"]
-            p2.download_button("⬇️ permit_request" + (".pdf" if "pdf" in ct else ".docx"), data, f"permit_request_{bid}." + ("pdf" if "pdf" in ct else "docx"))
+                st.session_state["permit_file"] = (r.content, r.headers.get("content-type", ""), r.headers.get("X-Permit-Password"))
+        if p1.button("Generate Word (.docx)"): _fetch("docx")
+        if p2.button("Generate PDF"): _fetch("pdf")
+        if st.session_state.get("permit_file"):
+            data, ct, pw = st.session_state["permit_file"]
+            ext = "zip" if "zip" in ct else ("pdf" if "pdf" in ct else "docx")
+            st.download_button(f"⬇️ permit_request_{bid}.{ext}", data, f"permit_request_{bid}.{ext}")
+            if pw:
+                st.warning(f"كلمة مرور الملف (تظهر مرة واحدة، أرسلها للمستلم عبر قناة أخرى): **{pw}** — "
+                           f"File password (shown once; send it to the recipient by a different channel). Opens with 7-Zip / WinRAR / Keka.")
 
 
 # ---------------- 3 review ----------------
@@ -181,7 +205,7 @@ elif page.startswith("3"):
     st.header("Manual Review")
     queue = api("GET", "/api/v1/review/queue").json()
     if not queue:
-        st.success("Review queue is empty 🎉"); st.stop()
+        st.success("قائمة المراجعة فارغة. / Review queue is empty."); st.stop()
     labels = {f"#{q['document_id']} · {q['filename']} · {q['recommendation'] or ''}": q["document_id"] for q in queue}
     doc_id = labels[st.selectbox(f"Queue ({len(queue)})", list(labels))]
     d = api("GET", f"/api/v1/documents/{doc_id}", params={"unmask": "true"}).json()
@@ -202,8 +226,9 @@ elif page.startswith("3"):
                 if fv.get("bbox"):
                     x, y, w, h = fv["bbox"]
                     draw.rectangle([x, y, x + w, y + h], outline=(255, 0, 0) if name == focus else (0, 120, 255), width=4 if name == focus else 2)
-            st.image(im, use_container_width=True)
-            st.caption("Blue: extracted fields · Red: field in focus")
+            alt = f"Processed card image for document {doc_id}: {d['filename']}; blue boxes mark extracted fields"
+            st.image(im, use_container_width=True, caption=alt)
+            st.caption("Blue boxes = extracted fields · Red box = field in focus")
         else:
             st.info("Image no longer available (deleted per retention policy).")
     with right:
@@ -213,9 +238,8 @@ elif page.startswith("3"):
         for name in order:
             fv = d["fields"].get(name, {})
             conf = fv.get("confidence", 0.0)
-            flag = "🟢" if conf >= 0.75 else ("🟠" if conf >= 0.5 else "🔴")
             src = fv.get("source", "")
-            val = st.text_input(f"{flag} {name}  ·  conf {conf:.2f}  ·  {src}{'  ·  ' + fv['note'] if fv.get('note') else ''}",
+            val = st.text_input(f"{name}  ·  {conf_badge(conf)}  ·  {src}{'  ·  ' + fv['note'] if fv.get('note') else ''}",
                                 value=fv.get("normalized") or "", key=f"f_{doc_id}_{name}")
             if (val or None) != (fv.get("normalized") or None):
                 new[name] = val or None

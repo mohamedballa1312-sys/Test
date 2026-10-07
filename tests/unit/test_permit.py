@@ -93,6 +93,7 @@ def test_more_than_27_workers_adds_rows():
 
 def test_rejects_wrong_template():
     import pytest
+
     from app.services.permit import PermitTemplateError
     with pytest.raises(PermitTemplateError):
         PermitGenerator(b"not a docx")

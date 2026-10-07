@@ -169,7 +169,6 @@ class PermitGenerator:
     DATE_FONT_HALF_POINTS = 32   # 16 pt, bold - user feedback: the date line must stand out
 
     def _fill_dates(self, xml: str, d: date) -> str:
-        g = d.strftime("%Y/%m/%d")
         # the whole date paragraph gets a larger bold font (labels and values alike)
         m = re.search(r"<w:p[ >](?:(?!</w:p>).)*?التـاريخ(?:(?!</w:p>).)*?</w:p>", xml, re.S)
         if m:
@@ -214,7 +213,7 @@ class PermitGenerator:
         rows = _TR.findall(t0)
         values = [data.project_name, data.project_location, _ltr(data.work_start), _ltr(data.work_end_expected)]
         new_t0 = t0
-        for row, val in zip(rows, values):
+        for row, val in zip(rows, values, strict=False):
             cells = _TC.findall(row)
             rpr = _first_rpr(cells[0]) or _first_rpr(cells[1])
             new_row = row.replace(cells[0], _set_cell(cells[0], val, rpr), 1)

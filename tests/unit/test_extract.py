@@ -1,5 +1,4 @@
 """Extractor on synthetic OCR lines mimicking the real card layout (fake identities)."""
-from app.engines.rules import RulesSnapshot
 from app.pipeline.extract import Extractor, merge_rows
 from app.pipeline.ocr.base import OCRLine
 

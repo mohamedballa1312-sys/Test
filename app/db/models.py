@@ -1,7 +1,7 @@
 """SQLAlchemy models (Architecture §7). Sensitive columns are encrypted at rest via EncryptedText."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, TypeDecorator
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -26,7 +26,7 @@ class EncryptedText(TypeDecorator):
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
@@ -55,7 +55,7 @@ class Batch(Base):
     requesting_companies_json: Mapped[str] = mapped_column(Text, default="[]")   # companies requesting the permit
     project_json: Mapped[str] = mapped_column(Text, default="{}")                # name/location/start/end for the permit form
     permit_exported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    documents: Mapped[list["Document"]] = relationship(back_populates="batch", cascade="all, delete-orphan")
+    documents: Mapped[list[Document]] = relationship(back_populates="batch", cascade="all, delete-orphan")
 
 
 class Document(Base):
@@ -80,9 +80,9 @@ class Document(Base):
     company_source: Mapped[str | None] = mapped_column(String(16))                # CARD | AUTO | MANUAL | NATIONAL_ID
     extraction_json: Mapped[str | None] = mapped_column(EncryptedText)  # full ExtractionResult (raw lines incl.)
     batch: Mapped[Batch] = relationship(back_populates="documents")
-    fields: Mapped[list["ExtractedField"]] = relationship(back_populates="document", cascade="all, delete-orphan")
-    decisions: Mapped[list["DecisionRow"]] = relationship(back_populates="document", cascade="all, delete-orphan")
-    reviews: Mapped[list["Review"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+    fields: Mapped[list[ExtractedField]] = relationship(back_populates="document", cascade="all, delete-orphan")
+    decisions: Mapped[list[DecisionRow]] = relationship(back_populates="document", cascade="all, delete-orphan")
+    reviews: Mapped[list[Review]] = relationship(back_populates="document", cascade="all, delete-orphan")
 
 
 SENSITIVE_FIELDS = {"iqama_no", "name_ar", "name_en", "birth_date", "employer_id"}

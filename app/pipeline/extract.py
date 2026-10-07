@@ -219,7 +219,6 @@ class Extractor:
 
     # ---------- spatial value assignment ----------
     def _assign_values(self, anchors: list[Anchor], free: list[OCRLine]) -> None:
-        anchor_lines = [a.line for a in anchors]
         for a in anchors:
             if a.inline_value:
                 continue
@@ -491,7 +490,7 @@ class Extractor:
                 iq = res.value("iqama_no") or ""
                 c = [f for f in found if f[0][0] in "127" and luhn_ok(f[0])
                      and re.search(r"(?<!\d)\d{10}(?!\d)", f[2].text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩", "0123456789")))   # one contiguous run
-                     and sum(a != b for a, b in zip(f[0], iq)) > 2]                                                        # not the Iqama misread
+                     and sum(a != b for a, b in zip(f[0], iq, strict=False)) > 2]                                                        # not the Iqama misread
                 if c:
                     n, cf, l = max(c, key=lambda t: t[1])
                     res.set(FieldValue(field="employer_id", raw_text=l.text, normalized=n, confidence=round(max(cf * 0.95, 0.78 if luhn_ok(n) else 0.0), 3), bbox=l.bbox, source="pattern", note="pattern_fallback"))
@@ -548,9 +547,7 @@ class Extractor:
         old += min(3, self._old_header_score(lines))
         if (res.fields.get("expiry_date") or FieldValue(field="x")).note and "hijri" in (res.fields["expiry_date"].note or ""):
             old += 2
-        bare = {"الرقم", "الانتهاء", "الميلاد", "صاحب العمل", "الاصدار"}
         for a in anchors:
-            m = self._best_label(normalize_arabic(a.line.text) or "", anchored_start=True, relaxed=True)
             # which variant matched? approximate: a short label text (<= 9 chars) for these fields signals the old layout
             if a.field in ("iqama_no", "expiry_date", "birth_date", "employer_name", "issue_place") and len((normalize_arabic(a.line.text) or "").split(":")[0].strip()) <= 9:
                 old += 1

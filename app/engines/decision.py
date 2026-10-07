@@ -1,8 +1,6 @@
 """Decision engine — gates G0..G3 (Architecture §6). Deterministic: same input + same rules version = same output."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from app.core.clock import Clock
 from app.engines.employer import check_employer
 from app.engines.expiry import check_expiry
