@@ -8,6 +8,8 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends && apt-get inst
 WORKDIR /srv
 COPY pyproject.toml README.md requirements.lock ./
 RUN pip install --upgrade "pip>=25" "wheel>=0.46.2" "setuptools>=80" && mkdir -p app && pip install -r requirements.lock && pip install --no-deps -e .
+# pip is not needed at runtime; removing it also drops its vendored msgpack/urllib3/setuptools copies that Trivy flags
+RUN python -m pip uninstall -y pip && rm -rf /usr/local/lib/python3.11/ensurepip
 COPY app ./app
 COPY config ./config
 COPY ui ./ui
